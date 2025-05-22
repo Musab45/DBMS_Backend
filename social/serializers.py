@@ -71,6 +71,8 @@ class CommentSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source='author.username', read_only=True)
+    author_user_id = serializers.ReadOnlyField(source='author.id')
+    author_profile_id = serializers.ReadOnlyField(source='author.profile.id')
     likes_count = serializers.SerializerMethodField()
     reposts_count = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
@@ -78,9 +80,9 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ('id', 'username', 'content', 'image', 'created_at', 'updated_at', 
-                 'likes_count', 'reposts_count', 'comments_count', 'comments')
-        read_only_fields = ('id', 'created_at', 'updated_at')
+        fields = ('id', 'username', 'author_user_id', 'author_profile_id', 'content', 'image', 
+                 'created_at', 'updated_at', 'likes_count', 'reposts_count', 'comments_count', 'comments')
+        read_only_fields = ('id', 'username', 'author_user_id', 'author_profile_id', 'created_at', 'updated_at')
 
     def get_likes_count(self, obj):
         return obj.likes.count()
