@@ -70,7 +70,7 @@ class CommentSerializer(serializers.ModelSerializer):
         return CommentSerializer(replies, many=True).data
 
 class PostSerializer(serializers.ModelSerializer):
-    username = serializers.CharField(source='author.username', read_only=True)
+    author_username = serializers.CharField(source='author.username', read_only=True)
     author_user_id = serializers.ReadOnlyField(source='author.id')
     author_profile_id = serializers.ReadOnlyField(source='author.profile.id')
     likes_count = serializers.SerializerMethodField()
@@ -80,9 +80,9 @@ class PostSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Post
-        fields = ('id', 'username', 'author_user_id', 'author_profile_id', 'content', 'image', 
+        fields = ('id', 'author_username', 'author_user_id', 'author_profile_id', 'content', 'image', 
                  'created_at', 'updated_at', 'likes_count', 'reposts_count', 'comments_count', 'comments')
-        read_only_fields = ('id', 'username', 'author_user_id', 'author_profile_id', 'created_at', 'updated_at')
+        read_only_fields = ('id', 'author_username', 'author_user_id', 'author_profile_id', 'created_at', 'updated_at')
 
     def get_likes_count(self, obj):
         return obj.likes.count()
@@ -92,6 +92,20 @@ class PostSerializer(serializers.ModelSerializer):
 
     def get_comments_count(self, obj):
         return obj.comments.count()
+
+    def to_representation(self, instance):
+        """
+        Ensure all author-related fields are present and non-null
+        """
+        data = super().to_representation(instance)
+        # Ensure author fields are present
+        if not data.get('author_username'):
+            data['author_username'] = instance.author.username
+        if not data.get('author_user_id'):
+            data['author_user_id'] = instance.author.id
+        if not data.get('author_profile_id'):
+            data['author_profile_id'] = instance.author.profile.id
+        return data
 
 class MessageSerializer(serializers.ModelSerializer):
     sender_username = serializers.CharField(source='sender.username', read_only=True)
