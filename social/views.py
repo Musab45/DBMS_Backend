@@ -125,17 +125,22 @@ class PostViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def feed(self, request):
-        following = request.user.profile.following.all()
-        following_users = [profile.user for profile in following]
+        # Get the profiles that the current user follows
+        following_profiles = request.user.profile.following.all()
+        # Get the users associated with those profiles
+        following_users = User.objects.filter(profile__in=following_profiles)
+        # Get posts from those users
         posts = Post.objects.filter(author__in=following_users).order_by('-created_at')
         serializer = self.get_serializer(posts, many=True)
         return Response(serializer.data)
 
     @action(detail=False, methods=['get'])
     def explore(self, request):
-        # Get posts from users you don't follow
-        following = request.user.profile.following.all()
-        following_users = [profile.user for profile in following]
+        # Get the profiles that the current user follows
+        following_profiles = request.user.profile.following.all()
+        # Get the users associated with those profiles
+        following_users = User.objects.filter(profile__in=following_profiles)
+        # Get posts from users that are not in the following list
         posts = Post.objects.exclude(author__in=following_users).order_by('-created_at')
         serializer = self.get_serializer(posts, many=True)
         return Response(serializer.data)
