@@ -1,0 +1,295 @@
+# Social Media Django REST API Endpoints
+
+## Authentication Endpoints
+
+1. Register
+POST /api/auth/register/
+Input:
+{
+  "username": "string",
+  "password": "string",
+  "password2": "string",
+  "email": "string",
+  "first_name": "string",
+  "last_name": "string"
+}
+Output:
+{
+  "user": { ...user object... },
+  "refresh": "refresh_token_string",
+  "access": "access_token_string"
+}
+
+2. Login (Get Token)
+POST /api/auth/token/
+Input:
+{
+  "username": "string",
+  "password": "string"
+}
+Output:
+{
+  "refresh": "refresh_token_string",
+  "access": "access_token_string"
+}
+
+3. Refresh Token
+POST /api/auth/token/refresh/
+Input:
+{
+  "refresh": "refresh_token_string"
+}
+Output:
+{
+  "access": "access_token_string"
+}
+
+## User Endpoints
+
+4. Get User Info
+GET /api/users/{id}/
+Headers: Authorization: Bearer <access_token>
+Output: user object
+
+5. Get User Profile
+GET /api/users/{id}/profile/
+Headers: Authorization: Bearer <access_token>
+Output: profile object
+
+6. Get User's Posts
+GET /api/users/{id}/posts/
+Headers: Authorization: Bearer <access_token>
+Output: list of post objects
+
+7. Get User's Liked Posts
+GET /api/users/{id}/liked_posts/
+Headers: Authorization: Bearer <access_token>
+Output: list of post objects
+
+8. Get User's Reposted Posts
+GET /api/users/{id}/reposted_posts/
+Headers: Authorization: Bearer <access_token>
+Output: list of post objects
+
+## Profile Endpoints
+
+9. Update Profile
+PATCH /api/profiles/{id}/
+Headers: Authorization: Bearer <access_token>
+Input:
+{
+  "bio": "string",
+  "profile_picture": "file"
+}
+Output: updated profile object
+
+10. Follow/Unfollow a User
+POST /api/profiles/{id}/follow/
+Headers: Authorization: Bearer <access_token>
+Output:
+{ "status": "followed" } or { "status": "unfollowed" }
+
+11. Get Followers
+GET /api/profiles/{id}/followers/
+Headers: Authorization: Bearer <access_token>
+Output: list of profile objects
+
+12. Get Following
+GET /api/profiles/{id}/following/
+Headers: Authorization: Bearer <access_token>
+Output: list of profile objects
+
+## Post Endpoints
+
+13. Create Post
+POST /api/posts/
+Headers: Authorization: Bearer <access_token>
+Input:
+{
+  "content": "string",
+  "image": "file (optional)"
+}
+Output: post object
+
+14. Get Post Details
+GET /api/posts/{id}/
+Headers: Authorization: Bearer <access_token>
+Output: post object with comments
+
+15. Update Post
+PATCH /api/posts/{id}/
+Headers: Authorization: Bearer <access_token>
+Input:
+{
+  "content": "string",
+  "image": "file (optional)"
+}
+Output: updated post object
+
+16. Delete Post
+DELETE /api/posts/{id}/
+Headers: Authorization: Bearer <access_token>
+Output: 204 No Content
+
+17. Get Feed
+GET /api/posts/feed/
+Headers: Authorization: Bearer <access_token>
+Output: list of post objects
+
+18. Get Explore
+GET /api/posts/explore/
+Headers: Authorization: Bearer <access_token>
+Output: list of post objects
+
+19. Like/Unlike Post
+POST /api/posts/{id}/like/
+Headers: Authorization: Bearer <access_token>
+Output:
+{ "status": "liked" } or { "status": "unliked" }
+
+20. Repost/Unrepost
+POST /api/posts/{id}/repost/
+Headers: Authorization: Bearer <access_token>
+Output:
+{ "status": "reposted" } or { "status": "unreposted" }
+
+## Comment Endpoints
+
+21. Create Comment
+POST /api/comments/
+Headers: Authorization: Bearer <access_token>
+Input:
+{
+  "post": post_id,
+  "content": "string",
+  "parent": comment_id (optional, for replies)
+}
+Output: comment object
+
+22. Update Comment
+PATCH /api/comments/{id}/
+Headers: Authorization: Bearer <access_token>
+Input:
+{
+  "content": "string"
+}
+Output: updated comment object
+
+23. Delete Comment
+DELETE /api/comments/{id}/
+Headers: Authorization: Bearer <access_token>
+Output: 204 No Content
+
+24. Like/Unlike Comment
+POST /api/comments/{id}/like/
+Headers: Authorization: Bearer <access_token>
+Output:
+{ "status": "liked" } or { "status": "unliked" }
+
+## Message Endpoints
+
+25. Send Message
+POST /api/messages/
+Headers: Authorization: Bearer <access_token>
+Input:
+{
+  "receiver": user_id,
+  "content": "string"
+}
+Output: message object
+
+26. Get Conversations
+GET /api/messages/conversations/
+Headers: Authorization: Bearer <access_token>
+Output: list of message objects
+
+27. Get Conversation with User
+GET /api/messages/conversations/{user_id}/
+Headers: Authorization: Bearer <access_token>
+Output: list of message objects
+
+28. Get Unread Message Count
+GET /api/messages/unread_count/
+Headers: Authorization: Bearer <access_token>
+Output:
+{ "unread_count": int }
+
+29. Mark Message as Read
+POST /api/messages/{id}/mark_as_read/
+Headers: Authorization: Bearer <access_token>
+Output:
+{ "status": "marked as read" }
+
+## Object Formats
+
+User Object:
+{
+  "id": 1,
+  "username": "string",
+  "email": "string",
+  "first_name": "string",
+  "last_name": "string",
+  "profile": { ...profile object... }
+}
+
+Profile Object:
+{
+  "id": 1,
+  "user": { ...user object... },
+  "bio": "string",
+  "profile_picture": "url or null",
+  "followers_count": 0,
+  "following_count": 0,
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+
+Post Object:
+{
+  "id": 1,
+  "author": { ...user object... },
+  "content": "string",
+  "image": "url or null",
+  "created_at": "datetime",
+  "updated_at": "datetime",
+  "likes_count": 0,
+  "reposts_count": 0,
+  "comments_count": 0,
+  "comments": [ ...comment objects... ]
+}
+
+Comment Object:
+{
+  "id": 1,
+  "post": { ...post object... },
+  "author": { ...user object... },
+  "content": "string",
+  "created_at": "datetime",
+  "updated_at": "datetime",
+  "likes_count": 0,
+  "parent": comment_id or null,
+  "replies": [ ...comment objects... ]
+}
+
+Message Object:
+{
+  "id": 1,
+  "sender": { ...user object... },
+  "receiver": { ...user object... },
+  "content": "string",
+  "created_at": "datetime",
+  "is_read": false
+}
+
+# All endpoints (except registration and login) require:
+# Authorization: Bearer <access_token>
+
+# Response Status Codes:
+# 200: Success
+# 201: Created
+# 204: No Content (for successful deletions)
+# 400: Bad Request
+# 401: Unauthorized
+# 403: Forbidden
+# 404: Not Found
+# 500: Internal Server Error 
