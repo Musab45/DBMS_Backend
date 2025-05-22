@@ -127,8 +127,14 @@ class PostViewSet(viewsets.ModelViewSet):
     def feed(self, request):
         # Get the profiles that the current user follows
         following_profiles = request.user.profile.following.all()
+        
+        # If user follows no one, return empty list immediately
+        if not following_profiles.exists():
+            return Response([])
+            
         # Get the users associated with those profiles
         following_users = User.objects.filter(profile__in=following_profiles)
+        
         # Get posts from those users
         posts = Post.objects.filter(author__in=following_users).order_by('-created_at')
         serializer = self.get_serializer(posts, many=True)
@@ -138,10 +144,16 @@ class PostViewSet(viewsets.ModelViewSet):
     def explore(self, request):
         # Get the profiles that the current user follows
         following_profiles = request.user.profile.following.all()
-        # Get the users associated with those profiles
-        following_users = User.objects.filter(profile__in=following_profiles)
-        # Get posts from users that are not in the following list
-        posts = Post.objects.exclude(author__in=following_users).order_by('-created_at')
+        
+        # If user follows no one, show all posts in explore
+        if not following_profiles.exists():
+            posts = Post.objects.all().order_by('-created_at')
+        else:
+            # Get the users associated with those profiles
+            following_users = User.objects.filter(profile__in=following_profiles)
+            # Get posts from users that are not in the following list
+            posts = Post.objects.exclude(author__in=following_users).order_by('-created_at')
+            
         serializer = self.get_serializer(posts, many=True)
         return Response(serializer.data)
 
