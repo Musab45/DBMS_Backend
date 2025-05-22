@@ -1,295 +1,516 @@
-# Social Media Django REST API Endpoints
+# Social Media API Endpoints Documentation
 
 ## Authentication Endpoints
 
-1. Register
+### Register User
+```
 POST /api/auth/register/
-Input:
+Content-Type: application/json
+
+Request Body:
 {
-  "username": "string",
-  "password": "string",
-  "password2": "string",
-  "email": "string",
-  "first_name": "string",
-  "last_name": "string"
-}
-Output:
-{
-  "user": { ...user object... },
-  "refresh": "refresh_token_string",
-  "access": "access_token_string"
+    "username": "string",
+    "password": "string",
+    "password2": "string",
+    "email": "string",
+    "first_name": "string",
+    "last_name": "string"
 }
 
-2. Login (Get Token)
+Response (201 Created):
+{
+    "user": {
+        "id": integer,
+        "username": "string",
+        "email": "string",
+        "first_name": "string",
+        "last_name": "string",
+        "profile": {
+            "id": integer,
+            "username": "string",
+            "bio": "string",
+            "profile_picture": "string",
+            "followers_count": integer,
+            "following_count": integer,
+            "created_at": "datetime",
+            "updated_at": "datetime"
+        }
+    },
+    "refresh": "string",
+    "access": "string"
+}
+```
+
+### Login
+```
 POST /api/auth/token/
-Input:
+Content-Type: application/json
+
+Request Body:
 {
-  "username": "string",
-  "password": "string"
-}
-Output:
-{
-  "refresh": "refresh_token_string",
-  "access": "access_token_string"
+    "username": "string",
+    "password": "string"
 }
 
-3. Refresh Token
+Response (200 OK):
+{
+    "access": "string",
+    "refresh": "string",
+    "user": {
+        "id": integer,
+        "username": "string",
+        "email": "string",
+        "first_name": "string",
+        "last_name": "string",
+        "profile": {
+            "id": integer,
+            "username": "string",
+            "bio": "string",
+            "profile_picture": "string",
+            "followers_count": integer,
+            "following_count": integer,
+            "created_at": "datetime",
+            "updated_at": "datetime"
+        }
+    }
+}
+```
+
+### Refresh Token
+```
 POST /api/auth/token/refresh/
-Input:
+Content-Type: application/json
+
+Request Body:
 {
-  "refresh": "refresh_token_string"
+    "refresh": "string"
 }
-Output:
+
+Response (200 OK):
 {
-  "access": "access_token_string"
+    "access": "string"
 }
+```
 
 ## User Endpoints
 
-4. Get User Info
-GET /api/users/{id}/
-Headers: Authorization: Bearer <access_token>
-Output: user object
+### Get User Profile
+```
+GET /api/users/{user_id}/profile/
+Authorization: Bearer <access_token>
 
-5. Get User Profile
-GET /api/users/{id}/profile/
-Headers: Authorization: Bearer <access_token>
-Output: profile object
+Response (200 OK):
+{
+    "id": integer,
+    "username": "string",
+    "bio": "string",
+    "profile_picture": "string",
+    "followers_count": integer,
+    "following_count": integer,
+    "created_at": "datetime",
+    "updated_at": "datetime"
+}
+```
 
-6. Get User's Posts
-GET /api/users/{id}/posts/
-Headers: Authorization: Bearer <access_token>
-Output: list of post objects
+### Get User Posts
+```
+GET /api/users/{user_id}/posts/
+Authorization: Bearer <access_token>
 
-7. Get User's Liked Posts
-GET /api/users/{id}/liked_posts/
-Headers: Authorization: Bearer <access_token>
-Output: list of post objects
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "author_username": "string",
+        "author_user_id": integer,
+        "author_profile_id": integer,
+        "content": "string",
+        "image": "string",
+        "created_at": "datetime",
+        "updated_at": "datetime",
+        "likes_count": integer,
+        "reposts_count": integer,
+        "comments_count": integer,
+        "comments": [...]
+    }
+]
+```
 
-8. Get User's Reposted Posts
-GET /api/users/{id}/reposted_posts/
-Headers: Authorization: Bearer <access_token>
-Output: list of post objects
+### Get User Liked Posts
+```
+GET /api/users/{user_id}/liked_posts/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "author_username": "string",
+        "author_user_id": integer,
+        "author_profile_id": integer,
+        "content": "string",
+        "image": "string",
+        "created_at": "datetime",
+        "updated_at": "datetime",
+        "likes_count": integer,
+        "reposts_count": integer,
+        "comments_count": integer,
+        "comments": [...]
+    }
+]
+```
 
 ## Profile Endpoints
 
-9. Update Profile
-PATCH /api/profiles/{id}/
-Headers: Authorization: Bearer <access_token>
-Input:
+### Follow/Unfollow User
+```
+POST /api/profiles/{profile_id}/follow/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
 {
-  "bio": "string",
-  "profile_picture": "file"
+    "status": "followed" | "unfollowed"
 }
-Output: updated profile object
+```
 
-10. Follow/Unfollow a User
-POST /api/profiles/{id}/follow/
-Headers: Authorization: Bearer <access_token>
-Output:
-{ "status": "followed" } or { "status": "unfollowed" }
+### Get Followers
+```
+GET /api/profiles/{profile_id}/followers/
+Authorization: Bearer <access_token>
 
-11. Get Followers
-GET /api/profiles/{id}/followers/
-Headers: Authorization: Bearer <access_token>
-Output: list of profile objects
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "username": "string",
+        "bio": "string",
+        "profile_picture": "string",
+        "followers_count": integer,
+        "following_count": integer,
+        "created_at": "datetime",
+        "updated_at": "datetime"
+    }
+]
+```
 
-12. Get Following
-GET /api/profiles/{id}/following/
-Headers: Authorization: Bearer <access_token>
-Output: list of profile objects
+### Get Following
+```
+GET /api/profiles/{profile_id}/following/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "username": "string",
+        "bio": "string",
+        "profile_picture": "string",
+        "followers_count": integer,
+        "following_count": integer,
+        "created_at": "datetime",
+        "updated_at": "datetime"
+    }
+]
+```
 
 ## Post Endpoints
 
-13. Create Post
+### Create Post
+```
 POST /api/posts/
-Headers: Authorization: Bearer <access_token>
-Input:
+Authorization: Bearer <access_token>
+Content-Type: multipart/form-data
+
+Request Body:
 {
-  "content": "string",
-  "image": "file (optional)"
+    "content": "string",
+    "image": file (optional)
 }
-Output: post object
 
-14. Get Post Details
-GET /api/posts/{id}/
-Headers: Authorization: Bearer <access_token>
-Output: post object with comments
-
-15. Update Post
-PATCH /api/posts/{id}/
-Headers: Authorization: Bearer <access_token>
-Input:
+Response (201 Created):
 {
-  "content": "string",
-  "image": "file (optional)"
+    "id": integer,
+    "author_username": "string",
+    "author_user_id": integer,
+    "author_profile_id": integer,
+    "content": "string",
+    "image": "string",
+    "created_at": "datetime",
+    "updated_at": "datetime",
+    "likes_count": integer,
+    "reposts_count": integer,
+    "comments_count": integer,
+    "comments": []
 }
-Output: updated post object
+```
 
-16. Delete Post
-DELETE /api/posts/{id}/
-Headers: Authorization: Bearer <access_token>
-Output: 204 No Content
-
-17. Get Feed
+### Get Feed Posts
+```
 GET /api/posts/feed/
-Headers: Authorization: Bearer <access_token>
-Output: list of post objects
+Authorization: Bearer <access_token>
 
-18. Get Explore
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "author_username": "string",
+        "author_user_id": integer,
+        "author_profile_id": integer,
+        "content": "string",
+        "image": "string",
+        "created_at": "datetime",
+        "updated_at": "datetime",
+        "likes_count": integer,
+        "reposts_count": integer,
+        "comments_count": integer,
+        "comments": [...]
+    }
+]
+```
+
+### Get Explore Posts
+```
 GET /api/posts/explore/
-Headers: Authorization: Bearer <access_token>
-Output: list of post objects
+Authorization: Bearer <access_token>
 
-19. Like/Unlike Post
-POST /api/posts/{id}/like/
-Headers: Authorization: Bearer <access_token>
-Output:
-{ "status": "liked" } or { "status": "unliked" }
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "author_username": "string",
+        "author_user_id": integer,
+        "author_profile_id": integer,
+        "content": "string",
+        "image": "string",
+        "created_at": "datetime",
+        "updated_at": "datetime",
+        "likes_count": integer,
+        "reposts_count": integer,
+        "comments_count": integer,
+        "comments": [...]
+    }
+]
+```
 
-20. Repost/Unrepost
-POST /api/posts/{id}/repost/
-Headers: Authorization: Bearer <access_token>
-Output:
-{ "status": "reposted" } or { "status": "unreposted" }
+### Like/Unlike Post
+```
+POST /api/posts/{post_id}/like/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+{
+    "status": "liked" | "unliked"
+}
+```
+
+### Repost/Unrepost
+```
+POST /api/posts/{post_id}/repost/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+{
+    "status": "reposted" | "unreposted"
+}
+```
 
 ## Comment Endpoints
 
-21. Create Comment
+### Create Comment
+```
 POST /api/comments/
-Headers: Authorization: Bearer <access_token>
-Input:
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+Request Body:
 {
-  "post": post_id,
-  "content": "string",
-  "parent": comment_id (optional, for replies)
+    "post": integer,
+    "content": "string",
+    "parent": integer (optional)
 }
-Output: comment object
 
-22. Update Comment
-PATCH /api/comments/{id}/
-Headers: Authorization: Bearer <access_token>
-Input:
+Response (201 Created):
 {
-  "content": "string"
+    "id": integer,
+    "post": integer,
+    "username": "string",
+    "content": "string",
+    "created_at": "datetime",
+    "updated_at": "datetime",
+    "likes_count": integer,
+    "replies": [...]
 }
-Output: updated comment object
+```
 
-23. Delete Comment
-DELETE /api/comments/{id}/
-Headers: Authorization: Bearer <access_token>
-Output: 204 No Content
+### Like/Unlike Comment
+```
+POST /api/comments/{comment_id}/like/
+Authorization: Bearer <access_token>
 
-24. Like/Unlike Comment
-POST /api/comments/{id}/like/
-Headers: Authorization: Bearer <access_token>
-Output:
-{ "status": "liked" } or { "status": "unliked" }
+Response (200 OK):
+{
+    "status": "liked" | "unliked"
+}
+```
+
+### Reply to Comment
+```
+POST /api/comments/{comment_id}/reply/
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+Request Body:
+{
+    "content": "string"
+}
+
+Response (201 Created):
+{
+    "id": integer,
+    "post": integer,
+    "username": "string",
+    "content": "string",
+    "created_at": "datetime",
+    "updated_at": "datetime",
+    "likes_count": integer,
+    "replies": [...]
+}
+```
 
 ## Message Endpoints
 
-25. Send Message
-POST /api/messages/
-Headers: Authorization: Bearer <access_token>
-Input:
-{
-  "receiver": user_id,
-  "content": "string"
-}
-Output: message object
-
-26. Get Conversations
+### Get Conversations
+```
 GET /api/messages/conversations/
-Headers: Authorization: Bearer <access_token>
-Output: list of message objects
+Authorization: Bearer <access_token>
 
-27. Get Conversation with User
-GET /api/messages/conversations/{user_id}/
-Headers: Authorization: Bearer <access_token>
-Output: list of message objects
+Response (200 OK):
+[
+    {
+        "user": {
+            "id": integer,
+            "username": "string",
+            "email": "string",
+            "first_name": "string",
+            "last_name": "string",
+            "profile": {...}
+        },
+        "last_message": {
+            "id": integer,
+            "sender": integer,
+            "sender_username": "string",
+            "receiver": integer,
+            "receiver_username": "string",
+            "content": "string",
+            "created_at": "datetime",
+            "is_read": boolean
+        }
+    }
+]
+```
 
-28. Get Unread Message Count
+### Get Messages with User
+```
+GET /api/messages/with/{user_id}/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "sender": integer,
+        "sender_username": "string",
+        "receiver": integer,
+        "receiver_username": "string",
+        "content": "string",
+        "created_at": "datetime",
+        "is_read": boolean
+    }
+]
+```
+
+### Send Message
+```
+POST /api/messages/
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+Request Body:
+{
+    "receiver": integer,
+    "content": "string"
+}
+
+Response (201 Created):
+{
+    "id": integer,
+    "sender": integer,
+    "sender_username": "string",
+    "receiver": integer,
+    "receiver_username": "string",
+    "content": "string",
+    "created_at": "datetime",
+    "is_read": boolean
+}
+```
+
+### Get Unread Message Count
+```
 GET /api/messages/unread_count/
-Headers: Authorization: Bearer <access_token>
-Output:
-{ "unread_count": int }
+Authorization: Bearer <access_token>
 
-29. Mark Message as Read
-POST /api/messages/{id}/mark_as_read/
-Headers: Authorization: Bearer <access_token>
-Output:
-{ "status": "marked as read" }
-
-## Object Formats
-
-User Object:
+Response (200 OK):
 {
-  "id": 1,
-  "username": "string",
-  "email": "string",
-  "first_name": "string",
-  "last_name": "string",
-  "profile": { ...profile object... }
+    "unread_count": integer
 }
+```
 
-Profile Object:
+### Mark Message as Read
+```
+POST /api/messages/{message_id}/mark_as_read/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
 {
-  "id": 1,
-  "user": { ...user object... },
-  "bio": "string",
-  "profile_picture": "url or null",
-  "followers_count": 0,
-  "following_count": 0,
-  "created_at": "datetime",
-  "updated_at": "datetime"
+    "status": "marked as read"
 }
+```
 
-Post Object:
+## Error Responses
+
+All endpoints may return the following error responses:
+
+### 400 Bad Request
+```
 {
-  "id": 1,
-  "author": { ...user object... },
-  "content": "string",
-  "image": "url or null",
-  "created_at": "datetime",
-  "updated_at": "datetime",
-  "likes_count": 0,
-  "reposts_count": 0,
-  "comments_count": 0,
-  "comments": [ ...comment objects... ]
+    "field_name": ["error message"]
 }
+```
 
-Comment Object:
+### 401 Unauthorized
+```
 {
-  "id": 1,
-  "post": { ...post object... },
-  "author": { ...user object... },
-  "content": "string",
-  "created_at": "datetime",
-  "updated_at": "datetime",
-  "likes_count": 0,
-  "parent": comment_id or null,
-  "replies": [ ...comment objects... ]
+    "detail": "Authentication credentials were not provided."
 }
+```
 
-Message Object:
+### 403 Forbidden
+```
 {
-  "id": 1,
-  "sender": { ...user object... },
-  "receiver": { ...user object... },
-  "content": "string",
-  "created_at": "datetime",
-  "is_read": false
+    "detail": "You do not have permission to perform this action."
 }
+```
 
-# All endpoints (except registration and login) require:
-# Authorization: Bearer <access_token>
+### 404 Not Found
+```
+{
+    "detail": "Not found."
+}
+```
 
-# Response Status Codes:
-# 200: Success
-# 201: Created
-# 204: No Content (for successful deletions)
-# 400: Bad Request
-# 401: Unauthorized
-# 403: Forbidden
-# 404: Not Found
-# 500: Internal Server Error 
+### 500 Internal Server Error
+```
+{
+    "detail": "Internal server error."
+}
+``` 
