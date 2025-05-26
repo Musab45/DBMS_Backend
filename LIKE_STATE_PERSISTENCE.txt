@@ -1,0 +1,210 @@
+LIKE STATE PERSISTENCE IMPLEMENTATION
+===================================
+
+1. Create a LikeStateManager Class
+--------------------------------
+```dart
+import 'package:shared_preferences.dart';
+
+class LikeStateManager {
+  static const String _likedPostsKey = 'liked_posts';
+  static LikeStateManager? _instance;
+  late SharedPreferences _prefs;
+  Map<int, bool> _likedPosts = {};
+
+  // Singleton pattern
+  static Future<LikeStateManager> getInstance() async {
+    if (_instance == null) {
+      _instance = LikeStateManager();
+      await _instance!._init();
+    }
+    return _instance!;
+  }
+
+  Future<void> _init() async {
+    _prefs = await SharedPreferences.getInstance();
+    _loadLikedPosts();
+  }
+
+  // Load liked posts from SharedPreferences
+  void _loadLikedPosts() {
+    final String? likedPostsJson = _prefs.getString(_likedPostsKey);
+    if (likedPostsJson != null) {
+      final Map<String, dynamic> decoded = json.decode(likedPostsJson);
+      _likedPosts = decoded.map((key, value) => MapEntry(int.parse(key), value as bool));
+    }
+  }
+
+  // Save liked posts to SharedPreferences
+  Future<void> _saveLikedPosts() async {
+    final Map<String, bool> stringMap = _likedPosts.map((key, value) => MapEntry(key.toString(), value));
+    await _prefs.setString(_likedPostsKey, json.encode(stringMap));
+  }
+
+  // Check if a post is liked
+  bool isLiked(int postId) {
+    return _likedPosts[postId] ?? false;
+  }
+
+  // Toggle like state for a post
+  Future<void> toggleLike(int postId, bool liked) async {
+    _likedPosts[postId] = liked;
+    await _saveLikedPosts();
+  }
+}
+```
+
+2. Update PostCard Implementation
+-------------------------------
+```dart
+class PostCard extends StatefulWidget {
+  final int postId;
+  final String content;
+  // ... other properties
+
+  @override
+  _PostCardState createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  bool isLiked = false;
+  late LikeStateManager _likeManager;
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeLikeState();
+  }
+
+  Future<void> _initializeLikeState() async {
+    _likeManager = await LikeStateManager.getInstance();
+    setState(() {
+      isLiked = _likeManager.isLiked(widget.postId);
+      _isLoading = false;
+    });
+  }
+
+  Future<void> _handleLike() async {
+    try {
+      // Optimistically update UI
+      setState(() {
+        isLiked = !isLiked;
+      });
+
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/posts/${widget.postId}/like/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final bool newLikeState = response.body.contains('"status":"liked"');
+        // Update local state
+        await _likeManager.toggleLike(widget.postId, newLikeState);
+        setState(() {
+          isLiked = newLikeState;
+        });
+      } else {
+        // Revert optimistic update on error
+        setState(() {
+          isLiked = !isLiked;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update like status')),
+        );
+      }
+    } catch (e) {
+      // Revert optimistic update on error
+      setState(() {
+        isLiked = !isLiked;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Network error occurred')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return CircularProgressIndicator();
+    }
+
+    return Card(
+      child: Column(
+        children: [
+          Text(widget.content),
+          IconButton(
+            icon: Icon(
+              isLiked ? Icons.favorite : Icons.favorite_border,
+              color: isLiked ? Colors.red : Colors.grey,
+            ),
+            onPressed: _handleLike,
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+3. Initialize in Main App
+------------------------
+```dart
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialize LikeStateManager
+  await LikeStateManager.getInstance();
+  
+  runApp(MyApp());
+}
+```
+
+4. Key Improvements
+------------------
+1. Proper initialization of SharedPreferences
+2. Loading state while initializing
+3. Optimistic updates for better UX
+4. Error handling with state reversion
+5. Centralized state management
+6. Efficient storage using JSON
+7. Singleton pattern for global access
+
+5. Testing the Implementation
+---------------------------
+1. Like a post
+2. Close the app completely
+3. Reopen the app
+4. Verify the like state is maintained
+5. Test with multiple posts
+6. Test with network errors
+7. Test with app restarts
+
+6. Common Issues and Solutions
+----------------------------
+1. State not persisting:
+   - Check if SharedPreferences is properly initialized
+   - Verify the save operation is completing
+   - Check for any exceptions during save/load
+
+2. Slow initial load:
+   - Consider loading states in batches
+   - Implement pagination for large datasets
+   - Cache frequently accessed posts
+
+3. Memory issues:
+   - Implement cleanup for old/unused likes
+   - Consider limiting the number of stored likes
+   - Implement periodic cleanup
+
+Remember to:
+- Handle all edge cases
+- Implement proper error handling
+- Add loading indicators
+- Test thoroughly
+- Monitor performance
+- Consider implementing a cleanup strategy 

@@ -1,0 +1,201 @@
+Comments and Replies API Guide
+============================
+
+1. API Endpoints
+---------------
+Base URL: /api/
+
+a) Comments
+----------
+1. Get Comments for a Post
+   Endpoint: GET /comments/
+   Query Parameters:
+   - post: post_id (required)
+   
+   Response:
+   [
+       {
+           "id": 1,
+           "post": 123,
+           "username": "john_doe",
+           "content": "This is a comment",
+           "created_at": "2024-03-20T10:00:00Z",
+           "updated_at": "2024-03-20T10:00:00Z",
+           "likes_count": 5,
+           "replies": [
+               {
+                   "id": 2,
+                   "post": 123,
+                   "username": "jane_smith",
+                   "content": "This is a reply",
+                   "created_at": "2024-03-20T10:05:00Z",
+                   "updated_at": "2024-03-20T10:05:00Z",
+                   "likes_count": 2,
+                   "replies": []
+               }
+           ]
+       }
+   ]
+
+2. Create a Comment
+   Endpoint: POST /comments/
+   Headers:
+   - Authorization: Bearer <your_token>
+   
+   Request Body:
+   {
+       "post": 123,
+       "content": "This is a new comment"
+   }
+   
+   Response:
+   {
+       "id": 1,
+       "post": 123,
+       "username": "john_doe",
+       "content": "This is a new comment",
+       "created_at": "2024-03-20T10:00:00Z",
+       "updated_at": "2024-03-20T10:00:00Z",
+       "likes_count": 0,
+       "replies": []
+   }
+
+3. Like/Unlike a Comment
+   Endpoint: POST /comments/{comment_id}/like/
+   Headers:
+   - Authorization: Bearer <your_token>
+   
+   Response:
+   {
+       "status": "liked" // or "unliked"
+   }
+
+b) Replies
+---------
+1. Create a Reply
+   Endpoint: POST /comments/{comment_id}/reply/
+   Headers:
+   - Authorization: Bearer <your_token>
+   
+   Request Body:
+   {
+       "content": "This is a reply"
+   }
+   
+   Response:
+   {
+       "id": 2,
+       "post": 123,
+       "username": "jane_smith",
+       "content": "This is a reply",
+       "created_at": "2024-03-20T10:05:00Z",
+       "updated_at": "2024-03-20T10:05:00Z",
+       "likes_count": 0,
+       "replies": []
+   }
+
+2. Code Examples
+---------------
+
+a) Frontend (React) Example:
+```javascript
+// Create a comment
+const createComment = async (postId, content) => {
+    try {
+        const response = await axios.post('/api/comments/', {
+            post: postId,
+            content: content
+        }, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error creating comment:', error);
+        throw error;
+    }
+};
+
+// Create a reply
+const createReply = async (commentId, content) => {
+    try {
+        const response = await axios.post(`/api/comments/${commentId}/reply/`, {
+            content: content
+        }, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error creating reply:', error);
+        throw error;
+    }
+};
+
+// Like/Unlike a comment
+const toggleCommentLike = async (commentId) => {
+    try {
+        const response = await axios.post(`/api/comments/${commentId}/like/`, {}, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error toggling like:', error);
+        throw error;
+    }
+};
+```
+
+b) Backend (Django) Example:
+```python
+# Creating a comment
+comment = Comment.objects.create(
+    post=post,
+    author=request.user,
+    content=content
+)
+
+# Creating a reply
+reply = Comment.objects.create(
+    post=parent_comment.post,
+    author=request.user,
+    content=content,
+    parent=parent_comment
+)
+
+# Getting comments with replies
+comments = Comment.objects.filter(post=post, parent=None)
+```
+
+3. Important Notes
+-----------------
+1. All endpoints require authentication using JWT token
+2. Comments are ordered by creation time (oldest first)
+3. Replies are nested under their parent comments
+4. Each comment/reply includes:
+   - Author's username
+   - Creation and update timestamps
+   - Likes count
+   - Nested replies (if any)
+5. The API automatically handles:
+   - User authentication
+   - Comment-reply relationships
+   - Like/unlike functionality
+   - Proper nesting of replies
+
+4. Error Handling
+----------------
+Common error responses:
+- 401 Unauthorized: Missing or invalid token
+- 400 Bad Request: Invalid input data
+- 404 Not Found: Comment or post not found
+- 403 Forbidden: Insufficient permissions
+
+Example error response:
+{
+    "detail": "Authentication credentials were not provided."
+} 

@@ -1,0 +1,69 @@
+LIKE POST API
+=============
+
+Endpoint: POST /api/posts/{post_id}/like/
+
+Authentication Required: Yes (Bearer Token)
+
+Request:
+--------
+POST /api/posts/{post_id}/like/
+Authorization: Bearer <your_jwt_token>
+
+Parameters:
+-----------
+- post_id (path parameter): The ID of the post to like/unlike
+
+Response:
+---------
+1. When liking a post (user hasn't liked it before):
+{
+    "status": "liked"
+}
+
+2. When unliking a post (user has already liked it):
+{
+    "status": "unliked"
+}
+
+Error Responses:
+--------------
+1. Post not found (404):
+{
+    "detail": "Not found."
+}
+
+2. Unauthorized (401):
+{
+    "detail": "Authentication credentials were not provided."
+}
+
+3. Permission denied (403):
+{
+    "detail": "You do not have permission to perform this action."
+}
+
+Example Usage:
+-------------
+# Using Python requests
+import requests
+
+# Like a post
+response = requests.post(
+    'http://your-domain/api/posts/123/like/',
+    headers={'Authorization': 'Bearer your_jwt_token'}
+)
+
+# Response when liking
+print(response.json())  # {"status": "liked"}
+
+# Response when unliking (same endpoint)
+print(response.json())  # {"status": "unliked"}
+
+Implementation Details:
+---------------------
+- The endpoint is implemented as a custom action in the PostViewSet
+- It toggles the like status (likes if not liked, unlikes if already liked)
+- The like status is tracked in the likes ManyToManyField of the Post model
+- The endpoint requires authentication (IsAuthenticatedOrReadOnly permission)
+- The response is a simple status message indicating the action taken 

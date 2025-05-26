@@ -1,0 +1,215 @@
+LIKE FUNCTIONALITY IMPLEMENTATION GUIDE
+=====================================
+
+1. API Endpoints
+---------------
+a) Check Like Status
+   GET /api/posts/{post_id}/like/
+   
+   Response (200 OK):
+   {
+     "status": "liked" | "unliked"
+   }
+   
+   Error Responses:
+   - 404 Not Found: {"detail": "Post not found."}
+   - 401 Unauthorized: {"detail": "Authentication credentials were not provided."}
+
+b) Toggle Like Status
+   POST /api/posts/{post_id}/like/
+   
+   Response (200 OK):
+   {
+     "status": "liked" | "unliked"
+   }
+   
+   Error Responses:
+   - 404 Not Found: {"detail": "Post not found."}
+   - 401 Unauthorized: {"detail": "Authentication credentials were not provided."}
+
+2. Post List Response Format
+--------------------------
+When fetching posts (GET /api/posts/, GET /api/posts/explore/), each post includes:
+{
+  "id": 1,
+  "content": "Post content",
+  "is_liked": true | false,
+  "likes_count": 5,
+  "author_username": "username",
+  "author_user_id": 1,
+  "author_profile_id": 1,
+  "created_at": "2024-03-20T10:00:00Z",
+  "updated_at": "2024-03-20T10:00:00Z",
+  // ... other fields
+}
+
+3. Frontend Implementation
+------------------------
+a) Post Model:
+```dart
+class Post {
+  final int id;
+  final String content;
+  final bool isLiked;
+  final int likesCount;
+  // ... other fields
+
+  Post({
+    required this.id,
+    required this.content,
+    required this.isLiked,
+    required this.likesCount,
+    // ... other fields
+  });
+
+  factory Post.fromJson(Map<String, dynamic> json) {
+    return Post(
+      id: json['id'],
+      content: json['content'],
+      isLiked: json['is_liked'] ?? false,
+      likesCount: json['likes_count'] ?? 0,
+      // ... other fields
+    );
+  }
+}
+```
+
+b) Like Button Widget:
+```dart
+class LikeButton extends StatefulWidget {
+  final int postId;
+  final bool initialIsLiked;
+  final int initialLikesCount;
+
+  @override
+  _LikeButtonState createState() => _LikeButtonState();
+}
+
+class _LikeButtonState extends State<LikeButton> {
+  late bool isLiked;
+  late int likesCount;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    isLiked = widget.initialIsLiked;
+    likesCount = widget.initialLikesCount;
+  }
+
+  Future<void> _handleLike() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/posts/${widget.postId}/like/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final bool newLikeState = response.body.contains('"status":"liked"');
+        setState(() {
+          isLiked = newLikeState;
+          likesCount += newLikeState ? 1 : -1;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update like status')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Network error occurred')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton(
+          icon: _isLoading
+              ? SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Icon(
+                  isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: isLiked ? Colors.red : Colors.grey,
+                ),
+          onPressed: _isLoading ? null : _handleLike,
+        ),
+        Text('$likesCount'),
+      ],
+    );
+  }
+}
+```
+
+4. Best Practices
+----------------
+1. Always handle loading states
+2. Show error messages to users
+3. Update UI optimistically
+4. Handle network errors gracefully
+5. Maintain consistent state
+6. Use proper error boundaries
+7. Add loading indicators
+
+5. Error Handling
+----------------
+1. Network errors
+2. Server errors
+3. Authentication errors
+4. Invalid post IDs
+5. Rate limiting
+6. Timeout handling
+
+6. Testing
+---------
+1. Test like/unlike functionality
+2. Test error scenarios
+3. Test loading states
+4. Test UI updates
+5. Test state persistence
+6. Test network conditions
+7. Test authentication
+
+7. Common Issues and Solutions
+----------------------------
+1. Like state not updating:
+   - Check API response
+   - Verify state management
+   - Check network connection
+
+2. UI not updating:
+   - Verify setState calls
+   - Check widget rebuilds
+   - Verify state management
+
+3. Network errors:
+   - Implement retry logic
+   - Show proper error messages
+   - Handle offline state
+
+Remember to:
+- Always handle loading states
+- Show proper error messages
+- Update UI optimistically
+- Handle all error cases
+- Test thoroughly
+- Monitor performance
+- Consider offline support 

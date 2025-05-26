@@ -1,0 +1,464 @@
+MESSAGE READ/UNREAD STATUS IMPLEMENTATION GUIDE
+============================================
+
+1. API Endpoints
+---------------
+a. Get Unread Message Count
+GET /api/messages/unread_count/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+{
+    "unread_count": integer
+}
+
+b. Mark Message as Read
+POST /api/messages/{message_id}/mark_as_read/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+{
+    "status": "marked as read"
+}
+
+c. Get Messages with User
+GET /api/messages/with/{user_id}/
+Authorization: Bearer <access_token>
+
+Response (200 OK):
+[
+    {
+        "id": integer,
+        "sender": integer,
+        "sender_username": string,
+        "receiver": integer,
+        "receiver_username": string,
+        "content": string,
+        "created_at": datetime,
+        "is_read": boolean
+    }
+]
+
+2. Frontend Implementation
+-------------------------
+
+a. Message Model
+```dart
+class Message {
+  final int id;
+  final int sender;
+  final String senderUsername;
+  final int receiver;
+  final String receiverUsername;
+  final String content;
+  final DateTime createdAt;
+  final bool isRead;
+
+  Message({
+    required this.id,
+    required this.sender,
+    required this.senderUsername,
+    required this.receiver,
+    required this.receiverUsername,
+    required this.content,
+    required this.createdAt,
+    required this.isRead,
+  });
+
+  factory Message.fromJson(Map<String, dynamic> json) {
+    return Message(
+      id: json['id'],
+      sender: json['sender'],
+      senderUsername: json['sender_username'],
+      receiver: json['receiver'],
+      receiverUsername: json['receiver_username'],
+      content: json['content'],
+      createdAt: DateTime.parse(json['created_at']),
+      isRead: json['is_read'],
+    );
+  }
+}
+```
+
+b. Message Service
+```dart
+class MessageService {
+  final String baseUrl;
+  final String token;
+
+  MessageService({required this.baseUrl, required this.token});
+
+  Future<int> getUnreadCount() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/messages/unread_count/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['unread_count'];
+      } else {
+        throw Exception('Failed to get unread count');
+      }
+    } catch (e) {
+      throw Exception('Failed to get unread count: $e');
+    }
+  }
+
+  Future<void> markMessageAsRead(int messageId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/messages/$messageId/mark_as_read/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception('Failed to mark message as read');
+      }
+    } catch (e) {
+      throw Exception('Failed to mark message as read: $e');
+    }
+  }
+
+  Future<List<Message>> getMessagesWithUser(int userId) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/messages/with/$userId/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.map((json) => Message.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to get messages');
+      }
+    } catch (e) {
+      throw Exception('Failed to get messages: $e');
+    }
+  }
+}
+```
+
+c. Chat Screen Implementation
+```dart
+class ChatScreen extends StatefulWidget {
+  final int recipientId;
+  final String recipientUsername;
+
+  ChatScreen({
+    required this.recipientId,
+    required this.recipientUsername,
+  });
+
+  @override
+  _ChatScreenState createState() => _ChatScreenState();
+}
+
+class _ChatScreenState extends State<ChatScreen> {
+  final MessageService _messageService = MessageService(
+    baseUrl: 'YOUR_API_BASE_URL',
+    token: 'YOUR_ACCESS_TOKEN',
+  );
+  List<Message> _messages = [];
+  bool _isLoading = true;
+  final _messageController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadMessages();
+  }
+
+  Future<void> _loadMessages() async {
+    try {
+      setState(() => _isLoading = true);
+      final messages = await _messageService.getMessagesWithUser(widget.recipientId);
+      setState(() {
+        _messages = messages;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load messages')),
+      );
+    }
+  }
+
+  Future<void> _sendMessage() async {
+    if (_messageController.text.isEmpty) return;
+
+    try {
+      // Implement send message logic here
+      _messageController.clear();
+      await _loadMessages(); // Reload messages after sending
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to send message')),
+      );
+    }
+  }
+
+  Future<void> _markMessageAsRead(Message message) async {
+    if (!message.isRead && message.receiver == currentUserId) {
+      try {
+        await _messageService.markMessageAsRead(message.id);
+        // Update local message state
+        setState(() {
+          final index = _messages.indexWhere((m) => m.id == message.id);
+          if (index != -1) {
+            _messages[index] = Message(
+              id: message.id,
+              sender: message.sender,
+              senderUsername: message.senderUsername,
+              receiver: message.receiver,
+              receiverUsername: message.receiverUsername,
+              content: message.content,
+              createdAt: message.createdAt,
+              isRead: true,
+            );
+          }
+        });
+      } catch (e) {
+        print('Failed to mark message as read: $e');
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.recipientUsername),
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    reverse: true,
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      final isMe = message.sender == currentUserId;
+
+                      // Mark message as read when it becomes visible
+                      if (!message.isRead && !isMe) {
+                        _markMessageAsRead(message);
+                      }
+
+                      return MessageBubble(
+                        message: message,
+                        isMe: isMe,
+                      );
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: EdgeInsets.all(8.0),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _messageController,
+                          decoration: InputDecoration(
+                            hintText: 'Type a message...',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.send),
+                        onPressed: _sendMessage,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+    );
+  }
+}
+
+class MessageBubble extends StatelessWidget {
+  final Message message;
+  final bool isMe;
+
+  MessageBubble({
+    required this.message,
+    required this.isMe,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        padding: EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.blue : Colors.grey[300],
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              message.content,
+              style: TextStyle(
+                color: isMe ? Colors.white : Colors.black,
+              ),
+            ),
+            SizedBox(height: 4.0),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('HH:mm').format(message.createdAt),
+                  style: TextStyle(
+                    fontSize: 12.0,
+                    color: isMe ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+                if (isMe) ...[
+                  SizedBox(width: 4.0),
+                  Icon(
+                    message.isRead ? Icons.done_all : Icons.done,
+                    size: 16.0,
+                    color: Colors.white70,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+3. Unread Message Count Badge
+----------------------------
+```dart
+class UnreadMessageBadge extends StatefulWidget {
+  @override
+  _UnreadMessageBadgeState createState() => _UnreadMessageBadgeState();
+}
+
+class _UnreadMessageBadgeState extends State<UnreadMessageBadge> {
+  final MessageService _messageService = MessageService(
+    baseUrl: 'YOUR_API_BASE_URL',
+    token: 'YOUR_ACCESS_TOKEN',
+  );
+  int _unreadCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUnreadCount();
+    // Set up periodic refresh
+    Timer.periodic(Duration(minutes: 1), (timer) => _loadUnreadCount());
+  }
+
+  Future<void> _loadUnreadCount() async {
+    try {
+      final count = await _messageService.getUnreadCount();
+      setState(() => _unreadCount = count);
+    } catch (e) {
+      print('Failed to load unread count: $e');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        IconButton(
+          icon: Icon(Icons.message),
+          onPressed: () {
+            // Navigate to messages screen
+          },
+        ),
+        if (_unreadCount > 0)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: EdgeInsets.all(4.0),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                _unreadCount.toString(),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 12.0,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+```
+
+4. Best Practices
+----------------
+1. Always mark messages as read when they become visible in the chat
+2. Implement periodic refresh of unread message count
+3. Show loading states during API calls
+4. Handle errors gracefully with user feedback
+5. Use optimistic updates for better UX
+6. Implement proper error boundaries
+7. Add proper loading indicators
+8. Consider implementing retry logic
+9. Add proper error messages
+10. Test thoroughly
+
+5. Error Handling
+----------------
+1. Network errors
+2. Authentication errors
+3. Server errors
+4. Invalid message IDs
+5. Permission errors
+
+6. Performance Considerations
+---------------------------
+1. Implement pagination for messages
+2. Cache message data locally
+3. Use proper image loading techniques
+4. Optimize network calls
+5. Implement proper state management
+6. Use proper loading indicators
+7. Consider implementing offline support
+
+7. Security Considerations
+------------------------
+1. Never store sensitive data in shared preferences
+2. Implement proper input validation
+3. Handle user sessions securely
+4. Implement proper error handling
+5. Add proper error messages
+6. Test thoroughly
+
+Remember to:
+- Always fetch initial state from server
+- Handle loading states
+- Implement proper error handling
+- Add loading indicators
+- Consider offline support if needed
+- Add proper error messages
+- Test thoroughly 

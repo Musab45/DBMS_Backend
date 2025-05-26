@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-tsu(obp)$e)2r69n$2)b^*yarfm#fq^g_gz9v^e81pxc9em)ij
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['localhost', '192.168.87.1', '192.168.31.1']
+ALLOWED_HOSTS = ['localhost', '192.168.87.1', '192.168.31.1', '127.0.0.1', '192.168.100.96']
 
 
 # Application definition
@@ -81,16 +81,8 @@ WSGI_APPLICATION = 'social_media_api.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'mssql',
-        'NAME': 'Temp',
-        'USER': '',
-        'PASSWORD': '',
-        'HOST': 'THINKPAD\\SQLEXPRESS',
-        'PORT': '1433',
-        'OPTIONS': {
-            'driver': 'ODBC Driver 17 for SQL Server',
-            'trusted_connection': 'yes',
-        },
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 

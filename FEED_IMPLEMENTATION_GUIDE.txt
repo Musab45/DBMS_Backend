@@ -1,0 +1,350 @@
+FEED IMPLEMENTATION GUIDE
+=======================
+
+1. API Endpoint
+--------------
+GET /api/posts/feed/
+
+Authentication Required: Yes (Bearer Token)
+
+2. Request Format
+----------------
+Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Parameters:
+- page (query parameter, optional): Page number for pagination (default: 1)
+- page_size (query parameter, optional): Number of posts per page (default: 10)
+
+Example Request:
+```
+GET /api/posts/feed/?page=1&page_size=20
+```
+
+3. Response Format
+-----------------
+Success Response (200 OK):
+```json
+{
+    "count": 100,  // Total number of posts in feed
+    "next": "http://api.example.com/api/posts/feed/?page=2&page_size=20",
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "content": "Post content",
+            "image": "http://api.example.com/media/post_images/image.jpg",  // or null if no image
+            "created_at": "2024-03-20T10:00:00Z",
+            "updated_at": "2024-03-20T10:00:00Z",
+            "author_username": "username",
+            "author_user_id": 123,
+            "author_profile_id": 456,
+            "likes_count": 5,
+            "reposts_count": 2,
+            "comments_count": 3,
+            "is_liked": true,
+            "comments": [
+                {
+                    "id": 1,
+                    "content": "Comment content",
+                    "username": "commenter_username",
+                    "created_at": "2024-03-20T10:05:00Z",
+                    "likes_count": 2
+                }
+            ]
+        }
+        // ... more posts
+    ]
+}
+```
+
+4. Frontend Implementation
+-------------------------
+```dart
+// Feed Service
+class FeedService {
+  Future<PaginatedResponse<Post>> fetchFeed({
+    int page = 1,
+    int pageSize = 10,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/posts/feed/?page=$page&page_size=$pageSize'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return PaginatedResponse<Post>.fromJson(
+          data,
+          (json) => Post.fromJson(json as Map<String, dynamic>),
+        );
+      } else {
+        throw Exception('Failed to load feed');
+      }
+    } catch (e) {
+      throw Exception('Failed to load feed: $e');
+    }
+  }
+}
+
+// Feed Screen
+class FeedScreen extends StatefulWidget {
+  @override
+  _FeedScreenState createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<FeedScreen> {
+  final FeedService _service = FeedService();
+  final ScrollController _scrollController = ScrollController();
+  List<Post> _posts = [];
+  bool _isLoading = false;
+  bool _hasMore = true;
+  int _currentPage = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadFeed();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      _loadFeed();
+    }
+  }
+
+  Future<void> _loadFeed() async {
+    if (_isLoading || !_hasMore) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await _service.fetchFeed(
+        page: _currentPage,
+      );
+
+      setState(() {
+        _posts.addAll(response.results);
+        _hasMore = response.next != null;
+        _currentPage++;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load feed')),
+      );
+    }
+  }
+
+  Future<void> _refreshFeed() async {
+    setState(() {
+      _posts = [];
+      _currentPage = 1;
+      _hasMore = true;
+    });
+    await _loadFeed();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Feed'),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.add),
+            onPressed: () {
+              // Navigate to create post screen
+            },
+          ),
+        ],
+      ),
+      body: RefreshIndicator(
+        onRefresh: _refreshFeed,
+        child: _posts.isEmpty && !_isLoading
+            ? Center(
+                child: Text('No posts to show'),
+              )
+            : ListView.builder(
+                controller: _scrollController,
+                itemCount: _posts.length + (_hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == _posts.length) {
+                    return Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+                  return PostCard(
+                    post: _posts[index],
+                    onLike: () {
+                      // Handle like action
+                    },
+                    onComment: () {
+                      // Handle comment action
+                    },
+                    onShare: () {
+                      // Handle share action
+                    },
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+
+// Post Card Widget
+class PostCard extends StatelessWidget {
+  final Post post;
+  final VoidCallback onLike;
+  final VoidCallback onComment;
+  final VoidCallback onShare;
+
+  const PostCard({
+    Key? key,
+    required this.post,
+    required this.onLike,
+    required this.onComment,
+    required this.onShare,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ListTile(
+            leading: CircleAvatar(
+              backgroundImage: NetworkImage(post.authorProfileImage),
+            ),
+            title: Text(post.authorUsername),
+            subtitle: Text(
+              post.createdAt.toString(),
+              style: TextStyle(fontSize: 12),
+            ),
+          ),
+          if (post.image != null)
+            Image.network(
+              post.image!,
+              width: double.infinity,
+              fit: BoxFit.cover,
+            ),
+          Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(post.content),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              IconButton(
+                icon: Icon(
+                  post.isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: post.isLiked ? Colors.red : null,
+                ),
+                onPressed: onLike,
+              ),
+              Text('${post.likesCount}'),
+              IconButton(
+                icon: Icon(Icons.comment),
+                onPressed: onComment,
+              ),
+              Text('${post.commentsCount}'),
+              IconButton(
+                icon: Icon(Icons.share),
+                onPressed: onShare,
+              ),
+              Text('${post.repostsCount}'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+5. Best Practices
+----------------
+1. Implement infinite scrolling
+2. Use pull-to-refresh for updates
+3. Cache feed data
+4. Handle offline state
+5. Implement proper error handling
+6. Show loading indicators
+7. Optimize image loading
+8. Implement proper cleanup
+
+6. Performance Optimizations
+--------------------------
+1. Lazy loading of images
+2. Pagination
+3. Caching strategies
+4. Memory management
+5. Network request optimization
+6. Image compression
+7. List view optimization
+
+7. Error Handling
+----------------
+1. Network errors
+2. Authentication errors
+3. Server errors
+4. Data parsing errors
+5. Image loading errors
+6. State management errors
+
+8. Common Issues and Solutions
+----------------------------
+1. Memory leaks:
+   - Proper disposal of controllers
+   - Image caching
+   - List view optimization
+
+2. Performance issues:
+   - Implement pagination
+   - Lazy loading
+   - Image optimization
+   - Cache management
+
+3. Network issues:
+   - Retry logic
+   - Offline support
+   - Error handling
+   - Loading states
+
+Remember to:
+- Handle all error cases
+- Implement proper loading states
+- Add pull-to-refresh functionality
+- Consider offline support
+- Test thoroughly
+- Monitor performance
+- Implement proper error handling
+- Optimize for different screen sizes
+- Handle orientation changes
+- Implement proper state management 

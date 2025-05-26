@@ -1,0 +1,265 @@
+USER POSTS API GUIDE
+===================
+
+1. API Endpoint
+--------------
+GET /api/users/{user_id}/posts/
+
+Authentication Required: Yes (Bearer Token)
+
+2. Request Format
+----------------
+Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Parameters:
+- user_id (path parameter): The ID of the user whose posts you want to fetch
+- page (query parameter, optional): Page number for pagination (default: 1)
+- page_size (query parameter, optional): Number of posts per page (default: 10)
+
+Example Request:
+```
+GET /api/users/123/posts/?page=1&page_size=20
+```
+
+3. Response Format
+-----------------
+Success Response (200 OK):
+```json
+{
+    "count": 50,  // Total number of posts
+    "next": "http://api.example.com/api/users/123/posts/?page=2&page_size=20",  // URL for next page
+    "previous": null,  // URL for previous page
+    "results": [
+        {
+            "id": 1,
+            "content": "Post content",
+            "image": "http://api.example.com/media/post_images/image.jpg",  // or null if no image
+            "created_at": "2024-03-20T10:00:00Z",
+            "updated_at": "2024-03-20T10:00:00Z",
+            "author_username": "username",
+            "author_user_id": 123,
+            "author_profile_id": 456,
+            "likes_count": 5,
+            "reposts_count": 2,
+            "comments_count": 3,
+            "is_liked": true,  // Whether the current user has liked this post
+            "comments": [  // Optional: Include comments if requested
+                {
+                    "id": 1,
+                    "content": "Comment content",
+                    "username": "commenter_username",
+                    "created_at": "2024-03-20T10:05:00Z",
+                    "likes_count": 2
+                }
+            ]
+        }
+        // ... more posts
+    ]
+}
+```
+
+Error Responses:
+1. 401 Unauthorized:
+```json
+{
+    "detail": "Authentication credentials were not provided."
+}
+```
+
+2. 403 Forbidden:
+```json
+{
+    "detail": "You do not have permission to perform this action."
+}
+```
+
+3. 404 Not Found:
+```json
+{
+    "detail": "User not found."
+}
+```
+
+4. Frontend Implementation
+------------------------
+```dart
+class UserPostsService {
+  Future<PaginatedResponse<Post>> fetchUserPosts({
+    required int userId,
+    int page = 1,
+    int pageSize = 10,
+  }) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/users/$userId/posts/?page=$page&page_size=$pageSize'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return PaginatedResponse<Post>.fromJson(
+          data,
+          (json) => Post.fromJson(json as Map<String, dynamic>),
+        );
+      } else {
+        throw Exception('Failed to load user posts');
+      }
+    } catch (e) {
+      throw Exception('Failed to load user posts: $e');
+    }
+  }
+}
+
+// Pagination model
+class PaginatedResponse<T> {
+  final int count;
+  final String? next;
+  final String? previous;
+  final List<T> results;
+
+  PaginatedResponse({
+    required this.count,
+    this.next,
+    this.previous,
+    required this.results,
+  });
+
+  factory PaginatedResponse.fromJson(
+    Map<String, dynamic> json,
+    T Function(Map<String, dynamic>) fromJson,
+  ) {
+    return PaginatedResponse<T>(
+      count: json['count'],
+      next: json['next'],
+      previous: json['previous'],
+      results: (json['results'] as List)
+          .map((item) => fromJson(item as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+```
+
+5. Usage Example
+---------------
+```dart
+class UserPostsScreen extends StatefulWidget {
+  final int userId;
+
+  @override
+  _UserPostsScreenState createState() => _UserPostsScreenState();
+}
+
+class _UserPostsScreenState extends State<UserPostsScreen> {
+  final UserPostsService _service = UserPostsService();
+  List<Post> _posts = [];
+  bool _isLoading = false;
+  bool _hasMore = true;
+  int _currentPage = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+  }
+
+  Future<void> _loadPosts() async {
+    if (_isLoading || !_hasMore) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await _service.fetchUserPosts(
+        userId: widget.userId,
+        page: _currentPage,
+      );
+
+      setState(() {
+        _posts.addAll(response.results);
+        _hasMore = response.next != null;
+        _currentPage++;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load posts')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('User Posts')),
+      body: RefreshIndicator(
+        onRefresh: () async {
+          setState(() {
+            _posts = [];
+            _currentPage = 1;
+            _hasMore = true;
+          });
+          await _loadPosts();
+        },
+        child: ListView.builder(
+          itemCount: _posts.length + (_hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index == _posts.length) {
+              _loadPosts();
+              return Center(child: CircularProgressIndicator());
+            }
+            return PostCard(post: _posts[index]);
+          },
+        ),
+      ),
+    );
+  }
+}
+```
+
+6. Best Practices
+----------------
+1. Implement pagination to handle large datasets
+2. Show loading indicators
+3. Handle errors gracefully
+4. Implement pull-to-refresh
+5. Cache responses when appropriate
+6. Handle offline state
+7. Implement proper error boundaries
+
+7. Common Issues and Solutions
+----------------------------
+1. Performance issues with large datasets:
+   - Use pagination
+   - Implement lazy loading
+   - Cache responses
+
+2. Network errors:
+   - Implement retry logic
+   - Show proper error messages
+   - Handle offline state
+
+3. Memory issues:
+   - Clear old posts when refreshing
+   - Implement proper cleanup
+   - Monitor memory usage
+
+Remember to:
+- Handle all error cases
+- Implement proper loading states
+- Add pull-to-refresh functionality
+- Consider offline support
+- Test thoroughly
+- Monitor performance
+- Implement proper error handling 

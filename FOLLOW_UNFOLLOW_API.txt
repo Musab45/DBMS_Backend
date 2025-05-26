@@ -1,0 +1,34 @@
+Follow/Unfollow API Documentation
+
+Endpoint: POST /api/profiles/{profile_id}/follow/
+
+URL Parameters:
+- profile_id: integer (The ID of the profile to follow or unfollow)
+
+Request Headers:
+Authorization: Bearer <access_token>
+
+Request Body:
+None (POST request)
+
+Response (200 OK):
+{
+    "status": "followed" | "unfollowed" // Indicates the new status
+}
+
+Error Responses:
+
+1. 401 Unauthorized:
+{
+    "detail": "Authentication credentials were not provided."
+}
+
+2. 404 Not Found:
+{
+    "detail": "Not found." // If the profile_id does not exist
+}
+
+Notes:
+- This endpoint requires authentication with a valid access token.
+- The profile ID is a required path parameter in the URL.
+- Sending a POST request to this endpoint will toggle the follow status for the authenticated user regarding the specified profile. 

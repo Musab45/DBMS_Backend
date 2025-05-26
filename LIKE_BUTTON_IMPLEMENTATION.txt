@@ -1,0 +1,200 @@
+LIKE BUTTON IMPLEMENTATION GUIDE
+==============================
+
+1. State Management
+------------------
+Create a state variable to track the like status:
+```dart
+bool isLiked = false;
+```
+
+2. Like Button Widget
+--------------------
+```dart
+IconButton(
+  icon: Icon(
+    isLiked ? Icons.favorite : Icons.favorite_border,
+    color: isLiked ? Colors.red : Colors.grey,
+  ),
+  onPressed: () => _handleLike(),
+)
+```
+
+3. Like Handler Function
+-----------------------
+```dart
+Future<void> _handleLike() async {
+  try {
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/posts/$postId/like/'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      setState(() {
+        // Toggle the like state based on the response
+        isLiked = response.body.contains('"status":"liked"');
+      });
+    } else {
+      // Handle error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update like status')),
+      );
+    }
+  } catch (e) {
+    // Handle network error
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Network error occurred')),
+    );
+  }
+}
+```
+
+4. Persisting Like State
+-----------------------
+To persist the like state across app restarts:
+
+a. Using SharedPreferences:
+```dart
+// Save like state
+Future<void> _saveLikeState() async {
+  final prefs = await SharedPreferences.getInstance();
+  await prefs.setBool('post_${postId}_liked', isLiked);
+}
+
+// Load like state
+Future<void> _loadLikeState() async {
+  final prefs = await SharedPreferences.getInstance();
+  setState(() {
+    isLiked = prefs.getBool('post_${postId}_liked') ?? false;
+  });
+}
+```
+
+b. Using Provider/Bloc:
+```dart
+// LikeState class
+class LikeState {
+  final Map<int, bool> likedPosts;
+
+  LikeState({this.likedPosts = const {}});
+
+  LikeState copyWith({Map<int, bool>? likedPosts}) {
+    return LikeState(
+      likedPosts: likedPosts ?? this.likedPosts,
+    );
+  }
+}
+
+// LikeProvider
+class LikeProvider extends ChangeNotifier {
+  Map<int, bool> _likedPosts = {};
+
+  bool isLiked(int postId) => _likedPosts[postId] ?? false;
+
+  void toggleLike(int postId, bool liked) {
+    _likedPosts[postId] = liked;
+    notifyListeners();
+  }
+}
+```
+
+5. Complete Implementation Example
+--------------------------------
+```dart
+class PostCard extends StatefulWidget {
+  final int postId;
+  final String content;
+  // ... other properties
+
+  @override
+  _PostCardState createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  bool isLiked = false;
+  final LikeProvider _likeProvider = Provider.of<LikeProvider>(context);
+
+  @override
+  void initState() {
+    super.initState();
+    // Load initial like state
+    isLiked = _likeProvider.isLiked(widget.postId);
+  }
+
+  Future<void> _handleLike() async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/posts/${widget.postId}/like/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final bool newLikeState = response.body.contains('"status":"liked"');
+        setState(() {
+          isLiked = newLikeState;
+        });
+        // Update provider
+        _likeProvider.toggleLike(widget.postId, newLikeState);
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update like status')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          // Post content
+          Text(widget.content),
+          // Like button
+          IconButton(
+            icon: Icon(
+              isLiked ? Icons.favorite : Icons.favorite_border,
+              color: isLiked ? Colors.red : Colors.grey,
+            ),
+            onPressed: _handleLike,
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+6. Best Practices
+----------------
+1. Always handle errors gracefully
+2. Show loading state while API call is in progress
+3. Optimistically update UI before API response
+4. Cache like states for offline support
+5. Use proper state management for larger applications
+6. Implement proper error boundaries
+7. Add animations for better UX
+
+7. Additional Features
+---------------------
+1. Like count display
+2. Double tap to like
+3. Like animation
+4. Offline support
+5. Like notifications
+6. Like analytics
+
+Remember to:
+- Handle edge cases (network errors, timeouts)
+- Implement proper error handling
+- Add loading states
+- Consider offline support
+- Add proper animations
+- Follow platform design guidelines 

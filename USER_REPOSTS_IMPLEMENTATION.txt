@@ -1,0 +1,294 @@
+USER REPOSTS IMPLEMENTATION GUIDE
+===============================
+
+1. API Endpoint
+--------------
+GET /api/users/{user_id}/reposted_posts/
+
+Authentication Required: Yes (Bearer Token)
+
+2. Request Format
+----------------
+Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Parameters:
+- user_id (path parameter): The ID of the user whose reposts you want to fetch
+- page (query parameter, optional): Page number for pagination (default: 1)
+- page_size (query parameter, optional): Number of posts per page (default: 10)
+
+Example Request:
+```
+GET /api/users/123/reposted_posts/?page=1&page_size=20
+```
+
+3. Response Format
+-----------------
+Success Response (200 OK):
+```json
+{
+    "count": 50,  // Total number of reposted posts
+    "next": "http://api.example.com/api/users/123/reposted_posts/?page=2&page_size=20",
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "content": "Post content",
+            "image": "http://api.example.com/media/post_images/image.jpg",
+            "created_at": "2024-03-20T10:00:00Z",
+            "updated_at": "2024-03-20T10:00:00Z",
+            "author_username": "username",
+            "author_user_id": 123,
+            "author_profile_id": 456,
+            "likes_count": 5,
+            "reposts_count": 2,
+            "comments_count": 3,
+            "is_liked": true,
+            "is_reposted": true,
+            "comments": [...]
+        }
+        // ... more posts
+    ]
+}
+```
+
+4. Frontend Implementation
+-------------------------
+
+a. Post Service
+```dart
+class PostService {
+  final String baseUrl;
+  final String token;
+
+  PostService({required this.baseUrl, required this.token});
+
+  Future<List<Post>> getUserReposts(int userId, {int page = 1, int pageSize = 20}) async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/users/$userId/reposted_posts/?page=$page&page_size=$pageSize'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        final results = data['results'] as List;
+        return results.map((json) => Post.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load reposted posts');
+      }
+    } catch (e) {
+      throw Exception('Failed to load reposted posts: $e');
+    }
+  }
+}
+```
+
+b. User Reposts Screen
+```dart
+class UserRepostsScreen extends StatefulWidget {
+  final int userId;
+  final String username;
+
+  const UserRepostsScreen({
+    Key? key,
+    required this.userId,
+    required this.username,
+  }) : super(key: key);
+
+  @override
+  _UserRepostsScreenState createState() => _UserRepostsScreenState();
+}
+
+class _UserRepostsScreenState extends State<UserRepostsScreen> {
+  List<Post> _posts = [];
+  bool _isLoading = true;
+  bool _hasError = false;
+  int _currentPage = 1;
+  bool _hasMore = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReposts();
+  }
+
+  Future<void> _loadReposts({bool refresh = false}) async {
+    if (refresh) {
+      setState(() {
+        _currentPage = 1;
+        _hasMore = true;
+      });
+    }
+
+    if (!_hasMore || _isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
+
+    try {
+      final posts = await PostService(
+        baseUrl: 'YOUR_API_BASE_URL',
+        token: 'YOUR_ACCESS_TOKEN',
+      ).getUserReposts(
+        widget.userId,
+        page: _currentPage,
+      );
+
+      setState(() {
+        if (refresh) {
+          _posts = posts;
+        } else {
+          _posts.addAll(posts);
+        }
+        _isLoading = false;
+        _hasMore = posts.isNotEmpty;
+        _currentPage++;
+      });
+    } catch (e) {
+      setState(() {
+        _isLoading = false;
+        _hasError = true;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load reposted posts')),
+      );
+    }
+  }
+
+  void _handleRepostChanged(int postId, bool isReposted) {
+    setState(() {
+      final index = _posts.indexWhere((p) => p.id == postId);
+      if (index != -1) {
+        final post = _posts[index];
+        _posts[index] = Post(
+          id: post.id,
+          content: post.content,
+          image: post.image,
+          authorId: post.authorId,
+          authorUsername: post.authorUsername,
+          createdAt: post.createdAt,
+          likesCount: post.likesCount,
+          repostsCount: isReposted ? post.repostsCount + 1 : post.repostsCount - 1,
+          commentsCount: post.commentsCount,
+          isLiked: post.isLiked,
+          isReposted: isReposted,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('${widget.username}\'s Reposts'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: () => _loadReposts(refresh: true),
+        child: _hasError && _posts.isEmpty
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text('Failed to load reposted posts'),
+                    ElevatedButton(
+                      onPressed: () => _loadReposts(refresh: true),
+                      child: Text('Retry'),
+                    ),
+                  ],
+                ),
+              )
+            : ListView.builder(
+                itemCount: _posts.length + (_hasMore ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (index == _posts.length) {
+                    if (!_isLoading) {
+                      _loadReposts();
+                    }
+                    return Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+
+                  final post = _posts[index];
+                  return PostCard(
+                    post: post,
+                    onRepostChanged: _handleRepostChanged,
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
+```
+
+5. Usage
+--------
+To use the UserRepostsScreen:
+
+```dart
+Navigator.push(
+  context,
+  MaterialPageRoute(
+    builder: (context) => UserRepostsScreen(
+      userId: 123,
+      username: 'username',
+    ),
+  ),
+);
+```
+
+6. Features
+----------
+1. Pagination support
+2. Pull-to-refresh
+3. Error handling
+4. Loading states
+5. Repost status updates
+6. Infinite scroll
+
+7. Best Practices
+----------------
+1. Implement proper error handling
+2. Show loading indicators
+3. Handle network errors
+4. Implement retry functionality
+5. Update UI optimistically
+6. Handle state changes properly
+7. Implement proper cleanup
+
+8. Testing Checklist
+-------------------
+1. Basic Functionality:
+   - Load reposted posts
+   - Pagination works
+   - Pull-to-refresh works
+   - Repost status updates
+
+2. Error Cases:
+   - Network errors
+   - Server errors
+   - Invalid responses
+
+3. Edge Cases:
+   - Empty reposts list
+   - Network disconnection
+   - App backgrounding
+
+4. State Management:
+   - State updates correctly
+   - Parent notification works
+   - State rollback on error 

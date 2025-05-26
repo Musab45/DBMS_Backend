@@ -1,0 +1,325 @@
+REPOST IMPLEMENTATION GUIDE
+=========================
+
+1. Backend Implementation
+------------------------
+
+The backend already has the repost functionality implemented in the PostViewSet:
+
+```python
+@action(detail=True, methods=['post'])
+def repost(self, request, pk=None):
+    post = self.get_object()
+    if request.user in post.reposts.all():
+        post.reposts.remove(request.user)
+        return Response({"status": "unreposted"})
+    else:
+        post.reposts.add(request.user)
+        return Response({"status": "reposted"})
+```
+
+2. Frontend Implementation
+-------------------------
+
+a. Post Model
+```dart
+class Post {
+  final int id;
+  final String content;
+  final String? image;
+  final int authorId;
+  final String authorUsername;
+  final DateTime createdAt;
+  final int likesCount;
+  final int repostsCount;
+  final int commentsCount;
+  final bool isLiked;
+  final bool isReposted;
+
+  Post({
+    required this.id,
+    required this.content,
+    this.image,
+    required this.authorId,
+    required this.authorUsername,
+    required this.createdAt,
+    required this.likesCount,
+    required this.repostsCount,
+    required this.commentsCount,
+    required this.isLiked,
+    required this.isReposted,
+  });
+
+  factory Post.fromJson(Map<String, dynamic> json) {
+    return Post(
+      id: json['id'],
+      content: json['content'],
+      image: json['image'],
+      authorId: json['author'],
+      authorUsername: json['author_username'],
+      createdAt: DateTime.parse(json['created_at']),
+      likesCount: json['likes_count'],
+      repostsCount: json['reposts_count'],
+      commentsCount: json['comments_count'],
+      isLiked: json['is_liked'] ?? false,
+      isReposted: json['is_reposted'] ?? false,
+    );
+  }
+}
+```
+
+b. Post Service
+```dart
+class PostService {
+  final String baseUrl;
+  final String token;
+
+  PostService({required this.baseUrl, required this.token});
+
+  Future<bool> toggleRepost(int postId) async {
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/posts/$postId/repost/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data['status'] == 'reposted';
+      } else {
+        throw Exception('Failed to toggle repost');
+      }
+    } catch (e) {
+      throw Exception('Failed to toggle repost: $e');
+    }
+  }
+}
+```
+
+c. Post Card Widget
+```dart
+class PostCard extends StatelessWidget {
+  final Post post;
+  final Function(bool) onRepostChanged;
+
+  PostCard({
+    required this.post,
+    required this.onRepostChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Author info
+          ListTile(
+            leading: CircleAvatar(
+              child: Text(post.authorUsername[0].toUpperCase()),
+            ),
+            title: Text(post.authorUsername),
+            subtitle: Text(
+              DateFormat('MMM d, y • h:mm a').format(post.createdAt),
+            ),
+          ),
+          
+          // Post content
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(post.content),
+                if (post.image != null)
+                  Image.network(
+                    post.image!,
+                    fit: BoxFit.cover,
+                  ),
+              ],
+            ),
+          ),
+          
+          // Action buttons
+          ButtonBar(
+            children: [
+              // Like button
+              IconButton(
+                icon: Icon(
+                  post.isLiked ? Icons.favorite : Icons.favorite_border,
+                  color: post.isLiked ? Colors.red : null,
+                ),
+                onPressed: () {
+                  // Handle like
+                },
+              ),
+              Text('${post.likesCount}'),
+              
+              // Repost button
+              IconButton(
+                icon: Icon(
+                  post.isReposted ? Icons.repeat : Icons.repeat_outlined,
+                  color: post.isReposted ? Colors.green : null,
+                ),
+                onPressed: () async {
+                  try {
+                    final isReposted = await PostService(
+                      baseUrl: 'YOUR_API_BASE_URL',
+                      token: 'YOUR_ACCESS_TOKEN',
+                    ).toggleRepost(post.id);
+                    
+                    onRepostChanged(isReposted);
+                  } catch (e) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to repost')),
+                    );
+                  }
+                },
+              ),
+              Text('${post.repostsCount}'),
+              
+              // Comment button
+              IconButton(
+                icon: Icon(Icons.comment_outlined),
+                onPressed: () {
+                  // Handle comment
+                },
+              ),
+              Text('${post.commentsCount}'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+d. Feed Screen
+```dart
+class FeedScreen extends StatefulWidget {
+  @override
+  _FeedScreenState createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<FeedScreen> {
+  List<Post> _posts = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPosts();
+  }
+
+  Future<void> _loadPosts() async {
+    try {
+      // Load posts from API
+      setState(() => _isLoading = false);
+    } catch (e) {
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load posts')),
+      );
+    }
+  }
+
+  void _handleRepostChanged(int postId, bool isReposted) {
+    setState(() {
+      final index = _posts.indexWhere((p) => p.id == postId);
+      if (index != -1) {
+        final post = _posts[index];
+        _posts[index] = Post(
+          id: post.id,
+          content: post.content,
+          image: post.image,
+          authorId: post.authorId,
+          authorUsername: post.authorUsername,
+          createdAt: post.createdAt,
+          likesCount: post.likesCount,
+          repostsCount: isReposted ? post.repostsCount + 1 : post.repostsCount - 1,
+          commentsCount: post.commentsCount,
+          isLiked: post.isLiked,
+          isReposted: isReposted,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Feed'),
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+              onRefresh: _loadPosts,
+              child: ListView.builder(
+                itemCount: _posts.length,
+                itemBuilder: (context, index) {
+                  final post = _posts[index];
+                  return PostCard(
+                    post: post,
+                    onRepostChanged: (isReposted) =>
+                        _handleRepostChanged(post.id, isReposted),
+                  );
+                },
+              ),
+            ),
+    );
+  }
+}
+```
+
+3. Best Practices
+----------------
+1. Implement optimistic updates
+2. Handle errors gracefully
+3. Show loading states
+4. Add proper error messages
+5. Implement proper state management
+6. Add proper loading indicators
+7. Consider implementing retry logic
+8. Add proper error messages
+9. Test thoroughly
+10. Consider implementing offline support
+
+4. Error Handling
+----------------
+1. Network errors
+2. Authentication errors
+3. Server errors
+4. Invalid post IDs
+5. Permission errors
+6. Validation errors
+
+5. Performance Considerations
+---------------------------
+1. Implement optimistic updates
+2. Cache post data locally
+3. Optimize network calls
+4. Implement proper state management
+5. Use proper loading indicators
+6. Consider implementing offline support
+
+6. Security Considerations
+------------------------
+1. Never store sensitive data in shared preferences
+2. Implement proper input validation
+3. Handle user sessions securely
+4. Implement proper error handling
+5. Add proper error messages
+6. Test thoroughly
+
+Remember to:
+- Always fetch initial state from server
+- Handle loading states
+- Implement proper error handling
+- Add loading indicators
+- Consider offline support if needed
+- Add proper error messages
+- Test thoroughly 

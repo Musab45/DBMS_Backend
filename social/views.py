@@ -6,7 +6,7 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from django.shortcuts import get_object_or_404
-from .models import Profile, Post, Comment, Message
+from .models import Profile, Post, Comment, Message, Follow
 from .serializers import (
     UserSerializer, ProfileSerializer, PostSerializer,
     CommentSerializer, MessageSerializer, RegisterSerializer
@@ -14,6 +14,7 @@ from .serializers import (
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db.models import Q, Max
+from rest_framework.pagination import PageNumberPagination
 
 # Create your views here.
 
@@ -58,60 +59,114 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = PostSerializer(posts, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'])
+    def reposted_posts(self, request, pk=None):
+        user = self.get_object()
+        posts = Post.objects.filter(reposts=user).order_by('-created_at')
+        serializer = PostSerializer(posts, many=True)
+        return Response(serializer.data)
+
 class ProfileViewSet(viewsets.ModelViewSet):
     queryset = Profile.objects.all()
     serializer_class = ProfileSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
-    @action(detail=True, methods=['post'])
-    def follow(self, request, pk=None):
-        profile = self.get_object()
-        user_profile = request.user.profile
-        
-        if profile == user_profile:
-            return Response(
-                {"error": "You cannot follow yourself"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if profile in user_profile.following.all():
-            user_profile.following.remove(profile)
-            return Response({"status": "unfollowed"})
-        else:
-            user_profile.following.add(profile)
-            return Response({"status": "followed"})
-
     @action(detail=True, methods=['get'])
     def followers(self, request, pk=None):
-        profile = self.get_object()
-        followers = profile.followers.all()
-        serializer = ProfileSerializer(followers, many=True)
-        return Response(serializer.data)
+        try:
+            profile = self.get_object()
+            # Get users who are following this profile's user
+            followers = User.objects.filter(following_relationships__following=profile.user)
+            # Get the profiles of these users
+            follower_profiles = Profile.objects.filter(user__in=followers)
+            
+            serializer = ProfileSerializer(follower_profiles, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=True, methods=['get'])
     def following(self, request, pk=None):
         profile = self.get_object()
-        following = profile.user.following.all()
-        serializer = ProfileSerializer(following, many=True)
+        # Get users that this profile's user is following
+        following_users = User.objects.filter(follower_relationships__follower=profile.user)
+        # Now get the profiles of these users
+        following_profiles = Profile.objects.filter(user__in=following_users)
+        serializer = ProfileSerializer(following_profiles, many=True)
         return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def follow(self, request, pk=None):
+        profile_to_follow = self.get_object()
+        user_following = request.user
+
+        # Prevent following yourself
+        if user_following == profile_to_follow.user:
+            return Response({"detail": "You cannot follow yourself."}, status=status.HTTP_400_BAD_REQUEST)
+
+        follow_instance, created = Follow.objects.get_or_create(
+            follower=user_following,
+            following=profile_to_follow.user
+        )
+
+        if created:
+            return Response({"status": "followed"}, status=status.HTTP_200_OK)
+        else:
+            # If it already exists, it means the user was already following, so unfollow
+            follow_instance.delete()
+            return Response({"status": "unfollowed"}, status=status.HTTP_200_OK)
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
 class PostViewSet(viewsets.ModelViewSet):
     queryset = Post.objects.all()
     serializer_class = PostSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    pagination_class = StandardResultsSetPagination
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
 
+    @action(detail=True, methods=['get'])
+    def like(self, request, pk=None):
+        try:
+            post = self.get_object()
+            is_liked = post.likes.filter(id=request.user.id).exists()
+            return Response({
+                'status': 'liked' if is_liked else 'unliked'
+            })
+        except Post.DoesNotExist:
+            return Response(
+                {'detail': 'Post not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
-        post = self.get_object()
-        if request.user in post.likes.all():
-            post.likes.remove(request.user)
-            return Response({"status": "unliked"})
-        else:
-            post.likes.add(request.user)
-            return Response({"status": "liked"})
+        try:
+            post = self.get_object()
+            if request.user in post.likes.all():
+                post.likes.remove(request.user)
+                return Response({'status': 'unliked'})
+            else:
+                post.likes.add(request.user)
+                return Response({'status': 'liked'})
+        except Post.DoesNotExist:
+            return Response(
+                {'detail': 'Post not found.'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     @action(detail=True, methods=['post'])
     def repost(self, request, pk=None):
@@ -125,23 +180,60 @@ class PostViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def feed(self, request):
-        # Get posts from users that the current user follows
-        posts = Post.objects.filter(
-            author__profile__in=request.user.profile.following.all()
-        ).order_by('-created_at')
-        
-        serializer = self.get_serializer(posts, many=True)
-        return Response(serializer.data)
+        try:
+            # Get users that the current user follows
+            following_users = User.objects.filter(
+                follower_relationships__follower=request.user
+            )
+            
+            # Get posts from users that the current user follows
+            posts = Post.objects.filter(
+                author__in=following_users
+            ).order_by('-created_at')
+            
+            # Apply pagination
+            page = self.paginate_queryset(posts)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(posts, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['get'])
     def explore(self, request):
-        # Get posts from users that the current user doesn't follow
-        posts = Post.objects.exclude(
-            author__profile__in=request.user.profile.following.all()
-        ).order_by('-created_at')
-        
-        serializer = self.get_serializer(posts, many=True)
-        return Response(serializer.data)
+        try:
+            # Get users that the current user follows
+            following_users = User.objects.filter(
+                follower_relationships__follower=request.user
+            )
+            
+            # Get posts from users that the current user doesn't follow
+            # Exclude the current user's posts as well
+            posts = Post.objects.exclude(
+                author__in=following_users
+            ).exclude(
+                author=request.user
+            ).order_by('-created_at')
+            
+            # Apply pagination
+            page = self.paginate_queryset(posts)
+            if page is not None:
+                serializer = self.get_serializer(page, many=True)
+                return self.get_paginated_response(serializer.data)
+            
+            serializer = self.get_serializer(posts, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            return Response(
+                {'detail': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class CommentViewSet(viewsets.ModelViewSet):
     queryset = Comment.objects.all()
@@ -177,9 +269,30 @@ class MessageViewSet(viewsets.ModelViewSet):
     queryset = Message.objects.all()
     serializer_class = MessageSerializer
     permission_classes = [permissions.IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def perform_create(self, serializer):
         serializer.save(sender=self.request.user)
+
+    def update(self, request, *args, **kwargs):
+        message = self.get_object()
+        # Only allow sender to edit their own messages
+        if message.sender != request.user:
+            return Response(
+                {"error": "You can only edit your own messages"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        message = self.get_object()
+        # Only allow sender to delete their own messages
+        if message.sender != request.user:
+            return Response(
+                {"error": "You can only delete your own messages"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'])
     def conversations(self, request):
@@ -209,10 +322,18 @@ class MessageViewSet(viewsets.ModelViewSet):
             other_user = User.objects.get(pk=user_id)
         except User.DoesNotExist:
             return Response({'detail': 'User not found.'}, status=404)
+        
         messages = Message.objects.filter(
             (Q(sender=user) & Q(receiver=other_user)) |
             (Q(sender=other_user) & Q(receiver=user))
-        ).order_by('created_at')
+        ).order_by('-created_at')  # Changed to descending order to match frontend expectation
+        
+        # Apply pagination
+        page = self.paginate_queryset(messages)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        
         serializer = self.get_serializer(messages, many=True)
         return Response(serializer.data)
 

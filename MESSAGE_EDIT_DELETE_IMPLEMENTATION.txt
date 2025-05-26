@@ -1,0 +1,371 @@
+MESSAGE EDITING AND DELETION IMPLEMENTATION GUIDE
+=============================================
+
+1. API Endpoints
+---------------
+a. Edit Message
+PUT /api/messages/{message_id}/
+Authorization: Bearer <access_token>
+Content-Type: application/json
+
+Request Body:
+{
+    "content": "string"
+}
+
+Response (200 OK):
+{
+    "id": integer,
+    "sender": integer,
+    "sender_username": string,
+    "receiver": integer,
+    "receiver_username": string,
+    "content": string,
+    "created_at": datetime,
+    "is_read": boolean
+}
+
+b. Delete Message
+DELETE /api/messages/{message_id}/
+Authorization: Bearer <access_token>
+
+Response (204 No Content)
+
+2. Frontend Implementation
+-------------------------
+
+a. Update MessageService
+```dart
+class MessageService {
+  // ... existing code ...
+
+  Future<Message> editMessage(int messageId, String newContent) async {
+    try {
+      final response = await http.put(
+        Uri.parse('$baseUrl/api/messages/$messageId/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode({
+          'content': newContent,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        return Message.fromJson(json.decode(response.body));
+      } else {
+        throw Exception('Failed to edit message');
+      }
+    } catch (e) {
+      throw Exception('Failed to edit message: $e');
+    }
+  }
+
+  Future<void> deleteMessage(int messageId) async {
+    try {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/api/messages/$messageId/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+        },
+      );
+
+      if (response.statusCode != 204) {
+        throw Exception('Failed to delete message');
+      }
+    } catch (e) {
+      throw Exception('Failed to delete message: $e');
+    }
+  }
+}
+```
+
+b. Update MessageBubble Widget
+```dart
+class MessageBubble extends StatelessWidget {
+  final Message message;
+  final bool isMe;
+  final Function(String) onEdit;
+  final Function() onDelete;
+
+  MessageBubble({
+    required this.message,
+    required this.isMe,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+        padding: EdgeInsets.all(12.0),
+        decoration: BoxDecoration(
+          color: isMe ? Colors.blue : Colors.grey[300],
+          borderRadius: BorderRadius.circular(12.0),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Expanded(
+                  child: Text(
+                    message.content,
+                    style: TextStyle(
+                      color: isMe ? Colors.white : Colors.black,
+                    ),
+                  ),
+                ),
+                if (isMe)
+                  PopupMenuButton<String>(
+                    icon: Icon(
+                      Icons.more_vert,
+                      color: isMe ? Colors.white70 : Colors.black54,
+                      size: 20.0,
+                    ),
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        onEdit(message.content);
+                      } else if (value == 'delete') {
+                        onDelete();
+                      }
+                    },
+                    itemBuilder: (BuildContext context) => [
+                      PopupMenuItem<String>(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 20.0),
+                            SizedBox(width: 8.0),
+                            Text('Edit'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem<String>(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 20.0, color: Colors.red),
+                            SizedBox(width: 8.0),
+                            Text('Delete', style: TextStyle(color: Colors.red)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+            SizedBox(height: 4.0),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('HH:mm').format(message.createdAt),
+                  style: TextStyle(
+                    fontSize: 12.0,
+                    color: isMe ? Colors.white70 : Colors.black54,
+                  ),
+                ),
+                if (isMe) ...[
+                  SizedBox(width: 4.0),
+                  Icon(
+                    message.isRead ? Icons.done_all : Icons.done,
+                    size: 16.0,
+                    color: Colors.white70,
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+c. Update ChatScreen
+```dart
+class _ChatScreenState extends State<ChatScreen> {
+  // ... existing code ...
+
+  Future<void> _editMessage(Message message, String newContent) async {
+    try {
+      final updatedMessage = await _messageService.editMessage(
+        message.id,
+        newContent,
+      );
+      setState(() {
+        final index = _messages.indexWhere((m) => m.id == message.id);
+        if (index != -1) {
+          _messages[index] = updatedMessage;
+        }
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to edit message')),
+      );
+    }
+  }
+
+  Future<void> _deleteMessage(Message message) async {
+    try {
+      await _messageService.deleteMessage(message.id);
+      setState(() {
+        _messages.removeWhere((m) => m.id == message.id);
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete message')),
+      );
+    }
+  }
+
+  void _showEditDialog(Message message) {
+    final controller = TextEditingController(text: message.content);
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Edit Message'),
+        content: TextField(
+          controller: controller,
+          decoration: InputDecoration(
+            hintText: 'Edit your message',
+            border: OutlineInputBorder(),
+          ),
+          maxLines: 3,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (controller.text.isNotEmpty) {
+                _editMessage(message, controller.text);
+                Navigator.pop(context);
+              }
+            },
+            child: Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(Message message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delete Message'),
+        content: Text('Are you sure you want to delete this message?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              _deleteMessage(message);
+              Navigator.pop(context);
+            },
+            child: Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.recipientUsername),
+      ),
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    reverse: true,
+                    itemCount: _messages.length,
+                    itemBuilder: (context, index) {
+                      final message = _messages[index];
+                      final isMe = message.sender == currentUserId;
+
+                      if (!message.isRead && !isMe) {
+                        _markMessageAsRead(message);
+                      }
+
+                      return MessageBubble(
+                        message: message,
+                        isMe: isMe,
+                        onEdit: (content) => _showEditDialog(message),
+                        onDelete: () => _showDeleteConfirmation(message),
+                      );
+                    },
+                  ),
+                ),
+                // ... existing message input field ...
+              ],
+            ),
+    );
+  }
+}
+```
+
+3. Best Practices
+----------------
+1. Only show edit/delete options for messages sent by the current user
+2. Implement proper error handling
+3. Show loading states during API calls
+4. Use optimistic updates for better UX
+5. Add confirmation dialogs for destructive actions
+6. Implement proper error boundaries
+7. Add proper loading indicators
+8. Consider implementing retry logic
+9. Add proper error messages
+10. Test thoroughly
+
+4. Error Handling
+----------------
+1. Network errors
+2. Authentication errors
+3. Server errors
+4. Invalid message IDs
+5. Permission errors
+6. Validation errors
+
+5. Performance Considerations
+---------------------------
+1. Implement optimistic updates
+2. Cache message data locally
+3. Optimize network calls
+4. Implement proper state management
+5. Use proper loading indicators
+6. Consider implementing offline support
+
+6. Security Considerations
+------------------------
+1. Never store sensitive data in shared preferences
+2. Implement proper input validation
+3. Handle user sessions securely
+4. Implement proper error handling
+5. Add proper error messages
+6. Test thoroughly
+
+Remember to:
+- Always fetch initial state from server
+- Handle loading states
+- Implement proper error handling
+- Add loading indicators
+- Consider offline support if needed
+- Add proper error messages
+- Test thoroughly 

@@ -1,0 +1,199 @@
+LIKE STATE WITH DATABASE IMPLEMENTATION
+=====================================
+
+1. Backend API Endpoint
+----------------------
+```python
+# In your PostViewSet
+@action(detail=True, methods=['get'])
+def is_liked(self, request, pk=None):
+    post = self.get_object()
+    is_liked = post.likes.filter(id=request.user.id).exists()
+    return Response({'is_liked': is_liked})
+
+# When fetching posts, include like status
+class PostSerializer(serializers.ModelSerializer):
+    is_liked = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Post
+        fields = ('id', 'content', 'is_liked', ...)
+    
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return obj.likes.filter(id=request.user.id).exists()
+        return False
+```
+
+2. Frontend Implementation
+-------------------------
+```dart
+class Post {
+  final int id;
+  final String content;
+  final bool isLiked;
+  // ... other fields
+
+  Post({
+    required this.id,
+    required this.content,
+    required this.isLiked,
+    // ... other fields
+  });
+
+  factory Post.fromJson(Map<String, dynamic> json) {
+    return Post(
+      id: json['id'],
+      content: json['content'],
+      isLiked: json['is_liked'] ?? false,
+      // ... other fields
+    );
+  }
+}
+
+class PostCard extends StatefulWidget {
+  final Post post;
+  // ... other properties
+
+  @override
+  _PostCardState createState() => _PostCardState();
+}
+
+class _PostCardState extends State<PostCard> {
+  late bool isLiked;
+  bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize with the like status from the post data
+    isLiked = widget.post.isLiked;
+  }
+
+  Future<void> _handleLike() async {
+    if (_isLoading) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final response = await http.post(
+        Uri.parse('$baseUrl/api/posts/${widget.post.id}/like/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final bool newLikeState = response.body.contains('"status":"liked"');
+        setState(() {
+          isLiked = newLikeState;
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update like status')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Network error occurred')),
+      );
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          Text(widget.post.content),
+          IconButton(
+            icon: _isLoading
+                ? SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    isLiked ? Icons.favorite : Icons.favorite_border,
+                    color: isLiked ? Colors.red : Colors.grey,
+                  ),
+            onPressed: _isLoading ? null : _handleLike,
+          ),
+        ],
+      ),
+    );
+  }
+}
+```
+
+3. Fetching Posts with Like Status
+--------------------------------
+```dart
+class PostService {
+  Future<List<Post>> fetchPosts() async {
+    try {
+      final response = await http.get(
+        Uri.parse('$baseUrl/api/posts/'),
+        headers: {
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json',
+        },
+      );
+
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        return data.map((json) => Post.fromJson(json)).toList();
+      } else {
+        throw Exception('Failed to load posts');
+      }
+    } catch (e) {
+      throw Exception('Failed to load posts: $e');
+    }
+  }
+}
+```
+
+4. Key Improvements
+------------------
+1. Like status comes from the database
+2. No need for local storage of like states
+3. Real-time like status from server
+4. Loading state during like/unlike
+5. Proper error handling
+6. Optimistic updates for better UX
+
+5. Benefits of This Approach
+--------------------------
+1. Accurate like status from database
+2. Consistent state across devices
+3. No need to sync local storage
+4. Real-time updates
+5. Better data integrity
+6. Simpler state management
+
+6. Best Practices
+----------------
+1. Always fetch initial like status from server
+2. Show loading state during like/unlike
+3. Handle errors gracefully
+4. Implement proper error boundaries
+5. Add proper loading indicators
+6. Consider implementing retry logic
+7. Add proper error messages
+
+Remember to:
+- Always fetch initial state from server
+- Handle loading states
+- Implement proper error handling
+- Add loading indicators
+- Consider offline support if needed
+- Add proper error messages
+- Test thoroughly 

@@ -1,0 +1,94 @@
+Comments and Replies API Documentation
+====================================
+
+1. Comments API
+--------------
+a) Create a Comment
+   Endpoint: POST /comments/
+   Input:
+   {
+       "post": post_id,
+       "content": "Your comment text"
+   }
+   Output:
+   {
+       "id": comment_id,
+       "post": post_id,
+       "username": "author_username",
+       "content": "Your comment text",
+       "created_at": "timestamp",
+       "updated_at": "timestamp",
+       "likes_count": 0,
+       "replies": []
+   }
+
+b) Get Comments
+   Endpoint: GET /comments/
+   Output: List of comments with their replies
+   [
+       {
+           "id": comment_id,
+           "post": post_id,
+           "username": "author_username",
+           "content": "Comment text",
+           "created_at": "timestamp",
+           "updated_at": "timestamp",
+           "likes_count": number,
+           "replies": [
+               {
+                   "id": reply_id,
+                   "post": post_id,
+                   "username": "reply_author_username",
+                   "content": "Reply text",
+                   "created_at": "timestamp",
+                   "updated_at": "timestamp",
+                   "likes_count": number,
+                   "replies": []
+               }
+           ]
+       }
+   ]
+
+c) Like/Unlike a Comment
+   Endpoint: POST /comments/{comment_id}/like/
+   Output:
+   {
+       "status": "liked" // or "unliked"
+   }
+
+2. Replies API
+-------------
+a) Create a Reply
+   Endpoint: POST /comments/{comment_id}/reply/
+   Input:
+   {
+       "content": "Your reply text"
+   }
+   Output:
+   {
+       "id": reply_id,
+       "post": post_id,
+       "username": "author_username",
+       "content": "Your reply text",
+       "created_at": "timestamp",
+       "updated_at": "timestamp",
+       "likes_count": 0,
+       "replies": []
+   }
+
+Additional Features
+-----------------
+1. Comments are automatically associated with the authenticated user who creates them
+2. Comments include a likes count and nested replies
+3. Comments are ordered by creation time (oldest first)
+4. Each comment/reply includes:
+   - Author's username
+   - Creation and update times
+   - Likes count
+   - Nested replies (if any)
+
+Authentication
+-------------
+- All endpoints require authentication
+- Use JWT token in Authorization header
+- Format: "Bearer <your_token>" 

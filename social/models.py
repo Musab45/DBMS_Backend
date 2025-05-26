@@ -2,16 +2,34 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
 
+class Follow(models.Model):
+    follower = models.ForeignKey(User, related_name='following_relationships', on_delete=models.CASCADE)
+    following = models.ForeignKey(User, related_name='follower_relationships', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('follower', 'following')
+
+    def __str__(self):
+        return f"{self.follower.username} follows {self.following.username}"
+
 class Profile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
     bio = models.TextField(max_length=500, blank=True)
-    profile_picture = models.ImageField(upload_to='profile_pics/', blank=True, null=True)
-    followers = models.ManyToManyField('self', symmetrical=False, related_name='following', blank=True)
+    profile_picture = models.ImageField(upload_to='profile_pictures/', blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    @property
+    def followers_count(self):
+        return self.user.follower_relationships.count()
+
+    @property
+    def following_count(self):
+        return self.user.following_relationships.count()
+
     def __str__(self):
-        return f"{self.user.username}'s profile"
+        return self.user.username
 
 class Post(models.Model):
     author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='posts')
@@ -51,7 +69,7 @@ class Message(models.Model):
     is_read = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ['created_at']
+        ordering = ['-created_at']
 
     def __str__(self):
         return f"Message from {self.sender.username} to {self.receiver.username}"

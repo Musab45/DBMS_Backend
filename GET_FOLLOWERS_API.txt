@@ -1,0 +1,43 @@
+Get Followers API Documentation
+
+Endpoint: GET /api/profiles/{profile_id}/followers/
+
+URL Parameters:
+- profile_id: integer (The ID of the profile whose followers list you want to retrieve)
+
+Request Headers:
+Authorization: Bearer <access_token>
+
+Request Body:
+None (GET request)
+
+Response (200 OK):
+[
+    { // Array of Profile objects
+        "id": integer,
+        "username": "string",
+        "bio": "string",
+        "profile_picture": "string", // URL or path to profile picture
+        "followers_count": integer,
+        "following_count": integer,
+        "created_at": "datetime",
+        "updated_at": "datetime"
+    }
+]
+
+Error Responses:
+
+1. 401 Unauthorized:
+{
+    "detail": "Authentication credentials were not provided."
+}
+
+2. 404 Not Found:
+{
+    "detail": "Not found." // If the profile_id does not exist
+}
+
+Notes:
+- This endpoint requires authentication with a valid access token.
+- The profile ID is a required path parameter in the URL.
+- Returns a list of profile objects that are following the specified user. 

@@ -1,0 +1,311 @@
+COMMENT AND REPLY API DOCUMENTATION
+=================================
+
+1. Get Comments for a Post
+-------------------------
+Endpoint: GET /api/posts/{post_id}/comments/
+
+Authentication: Required (Bearer Token)
+
+Request Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Query Parameters:
+- page (optional): Page number for pagination (default: 1)
+- page_size (optional): Number of comments per page (default: 10)
+
+Example Request:
+```
+GET /api/posts/123/comments/?page=1&page_size=20
+```
+
+Success Response (200 OK):
+```json
+{
+    "count": 25,
+    "next": "http://api.example.com/api/posts/123/comments/?page=2",
+    "previous": null,
+    "results": [
+        {
+            "id": 1,
+            "content": "Main comment",
+            "created_at": "2024-03-20T10:00:00Z",
+            "updated_at": "2024-03-20T10:00:00Z",
+            "author_username": "user1",
+            "author_user_id": 123,
+            "likes_count": 5,
+            "is_liked": false,
+            "replies": [
+                {
+                    "id": 2,
+                    "content": "Reply to comment 1",
+                    "created_at": "2024-03-20T10:05:00Z",
+                    "updated_at": "2024-03-20T10:05:00Z",
+                    "author_username": "user2",
+                    "author_user_id": 456,
+                    "likes_count": 2,
+                    "is_liked": true,
+                    "parent_id": 1
+                }
+            ]
+        }
+    ]
+}
+```
+
+Error Responses:
+- 401 Unauthorized: Missing or invalid token
+- 404 Not Found: Post not found
+- 500 Internal Server Error: Server error
+
+2. Create Comment
+----------------
+Endpoint: POST /api/posts/{post_id}/comments/
+
+Authentication: Required (Bearer Token)
+
+Request Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Request Body:
+```json
+{
+    "content": "Your comment text"
+}
+```
+
+Success Response (201 Created):
+```json
+{
+    "id": 1,
+    "content": "Your comment text",
+    "created_at": "2024-03-20T10:00:00Z",
+    "updated_at": "2024-03-20T10:00:00Z",
+    "author_username": "current_user",
+    "author_user_id": 123,
+    "likes_count": 0,
+    "is_liked": false,
+    "replies": []
+}
+```
+
+Error Responses:
+- 400 Bad Request: Invalid input data
+- 401 Unauthorized: Missing or invalid token
+- 404 Not Found: Post not found
+- 500 Internal Server Error: Server error
+
+3. Create Reply
+--------------
+Endpoint: POST /api/comments/{comment_id}/reply/
+
+Authentication: Required (Bearer Token)
+
+Request Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Request Body:
+```json
+{
+    "content": "Your reply text"
+}
+```
+
+Success Response (201 Created):
+```json
+{
+    "id": 2,
+    "content": "Your reply text",
+    "created_at": "2024-03-20T10:05:00Z",
+    "updated_at": "2024-03-20T10:05:00Z",
+    "author_username": "current_user",
+    "author_user_id": 123,
+    "likes_count": 0,
+    "is_liked": false,
+    "parent_id": 1
+}
+```
+
+Error Responses:
+- 400 Bad Request: Invalid input data
+- 401 Unauthorized: Missing or invalid token
+- 404 Not Found: Comment not found
+- 500 Internal Server Error: Server error
+
+4. Like/Unlike Comment
+---------------------
+Endpoint: POST /api/comments/{comment_id}/like/
+
+Authentication: Required (Bearer Token)
+
+Request Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Success Response (200 OK):
+```json
+{
+    "status": "liked" // or "unliked"
+}
+```
+
+Error Responses:
+- 401 Unauthorized: Missing or invalid token
+- 404 Not Found: Comment not found
+- 500 Internal Server Error: Server error
+
+5. Delete Comment
+----------------
+Endpoint: DELETE /api/comments/{comment_id}/
+
+Authentication: Required (Bearer Token)
+
+Request Headers:
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+Success Response (204 No Content)
+
+Error Responses:
+- 401 Unauthorized: Missing or invalid token
+- 403 Forbidden: Not the comment author
+- 404 Not Found: Comment not found
+- 500 Internal Server Error: Server error
+
+6. Update Comment
+----------------
+Endpoint: PUT /api/comments/{comment_id}/
+
+Authentication: Required (Bearer Token)
+
+Request Headers:
+```
+Authorization: Bearer <your_jwt_token>
+Content-Type: application/json
+```
+
+Request Body:
+```json
+{
+    "content": "Updated comment text"
+}
+```
+
+Success Response (200 OK):
+```json
+{
+    "id": 1,
+    "content": "Updated comment text",
+    "created_at": "2024-03-20T10:00:00Z",
+    "updated_at": "2024-03-20T10:10:00Z",
+    "author_username": "current_user",
+    "author_user_id": 123,
+    "likes_count": 5,
+    "is_liked": false,
+    "replies": []
+}
+```
+
+Error Responses:
+- 400 Bad Request: Invalid input data
+- 401 Unauthorized: Missing or invalid token
+- 403 Forbidden: Not the comment author
+- 404 Not Found: Comment not found
+- 500 Internal Server Error: Server error
+
+7. Get Comment Replies
+---------------------
+Endpoint: GET /api/comments/{comment_id}/replies/
+
+Authentication: Required (Bearer Token)
+
+Request Headers:
+```
+Authorization: Bearer <your_jwt_token>
+```
+
+Query Parameters:
+- page (optional): Page number for pagination (default: 1)
+- page_size (optional): Number of replies per page (default: 10)
+
+Success Response (200 OK):
+```json
+{
+    "count": 10,
+    "next": "http://api.example.com/api/comments/1/replies/?page=2",
+    "previous": null,
+    "results": [
+        {
+            "id": 2,
+            "content": "Reply to comment 1",
+            "created_at": "2024-03-20T10:05:00Z",
+            "updated_at": "2024-03-20T10:05:00Z",
+            "author_username": "user2",
+            "author_user_id": 456,
+            "likes_count": 2,
+            "is_liked": true,
+            "parent_id": 1
+        }
+    ]
+}
+```
+
+Error Responses:
+- 401 Unauthorized: Missing or invalid token
+- 404 Not Found: Comment not found
+- 500 Internal Server Error: Server error
+
+8. Common Response Fields
+------------------------
+All comment and reply responses include these fields:
+- id: Unique identifier for the comment/reply
+- content: The comment/reply text
+- created_at: Timestamp when the comment/reply was created
+- updated_at: Timestamp when the comment/reply was last updated
+- author_username: Username of the comment/reply author
+- author_user_id: User ID of the comment/reply author
+- likes_count: Number of likes on the comment/reply
+- is_liked: Whether the current user has liked the comment/reply
+- parent_id: ID of the parent comment (only for replies)
+
+9. Pagination
+------------
+All list endpoints support pagination with these parameters:
+- page: Page number (starts from 1)
+- page_size: Number of items per page
+
+Response includes:
+- count: Total number of items
+- next: URL for the next page (null if no next page)
+- previous: URL for the previous page (null if no previous page)
+- results: Array of items for the current page
+
+10. Error Response Format
+------------------------
+All error responses follow this format:
+```json
+{
+    "detail": "Error message description"
+}
+```
+
+For validation errors (400 Bad Request):
+```json
+{
+    "field_name": [
+        "Error message for this field"
+    ]
+}
+``` 

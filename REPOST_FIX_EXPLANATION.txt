@@ -1,0 +1,240 @@
+REPOST FUNCTIONALITY FIX EXPLANATION
+===================================
+
+1. Issues Fixed
+--------------
+1. Double API calls when pressing repost button
+2. Incorrect repost count (-1 reposts)
+3. Simultaneous repost/unrepost actions
+4. Race conditions in state updates
+
+2. Solution Overview
+-------------------
+The solution implements:
+- Local state management
+- Loading state handling
+- Optimistic updates
+- Error handling with rollback
+- Race condition prevention
+
+3. Implementation Details
+------------------------
+
+a. State Management
+------------------
+```dart
+class _PostCardState extends State<PostCard> {
+  late bool _isReposted;
+  late int _repostsCount;
+  bool _isReposting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _isReposted = widget.post.isReposted;
+    _repostsCount = widget.post.repostsCount;
+  }
+
+  @override
+  void didUpdateWidget(PostCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.post != widget.post) {
+      _isReposted = widget.post.isReposted;
+      _repostsCount = widget.post.repostsCount;
+    }
+  }
+}
+```
+
+Key Points:
+- Local state variables track repost status and count
+- `_isReposting` flag prevents double triggers
+- `didUpdateWidget` handles post updates from parent
+
+b. Repost Handler
+----------------
+```dart
+Future<void> _handleRepost() async {
+  if (_isReposting) return;
+
+  setState(() {
+    _isReposting = true;
+    // Optimistic update
+    _isReposted = !_isReposted;
+    _repostsCount += _isReposted ? 1 : -1;
+  });
+
+  try {
+    final isReposted = await PostService(
+      baseUrl: 'YOUR_API_BASE_URL',
+      token: 'YOUR_ACCESS_TOKEN',
+    ).toggleRepost(widget.post.id);
+
+    if (!mounted) return;
+
+    // Update state based on server response
+    setState(() {
+      _isReposted = isReposted;
+      _repostsCount = widget.post.repostsCount + (isReposted ? 1 : -1);
+    });
+
+    // Notify parent widget
+    widget.onRepostChanged(isReposted);
+  } catch (e) {
+    if (!mounted) return;
+
+    // Revert optimistic update on error
+    setState(() {
+      _isReposted = widget.post.isReposted;
+      _repostsCount = widget.post.repostsCount;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Failed to ${_isReposted ? 'unrepost' : 'repost'}: ${e.toString()}'),
+        action: SnackBarAction(
+          label: 'Retry',
+          onPressed: _handleRepost,
+        ),
+      ),
+    );
+  } finally {
+    if (mounted) {
+      setState(() {
+        _isReposting = false;
+      });
+    }
+  }
+}
+```
+
+Key Points:
+- Prevents multiple simultaneous reposts
+- Implements optimistic updates
+- Handles errors with rollback
+- Shows loading state
+- Provides retry option
+
+c. UI Implementation
+-------------------
+```dart
+IconButton(
+  icon: _isReposting
+      ? SizedBox(
+          width: 20,
+          height: 20,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+          ),
+        )
+      : Icon(
+          _isReposted ? Icons.repeat : Icons.repeat_outlined,
+          color: _isReposted ? Colors.green : null,
+        ),
+  onPressed: _isReposting ? null : _handleRepost,
+),
+Text('$_repostsCount'),
+```
+
+Key Points:
+- Shows loading indicator during repost
+- Disables button during repost
+- Updates icon based on repost status
+- Shows current repost count
+
+4. Best Practices Implemented
+----------------------------
+1. State Management:
+   - Local state for UI updates
+   - Parent notification for global state
+   - Proper state synchronization
+
+2. Error Handling:
+   - Try-catch blocks
+   - Error messages
+   - Retry functionality
+   - State rollback
+
+3. Performance:
+   - Optimistic updates
+   - Loading states
+   - Race condition prevention
+   - Proper cleanup
+
+4. User Experience:
+   - Visual feedback
+   - Loading indicators
+   - Error messages
+   - Retry options
+
+5. Usage Instructions
+--------------------
+1. Ensure PostService is properly configured:
+   - Set correct base URL
+   - Set valid access token
+
+2. Parent widget implementation:
+```dart
+void _handleRepostChanged(int postId, bool isReposted) {
+  setState(() {
+    final index = _posts.indexWhere((p) => p.id == postId);
+    if (index != -1) {
+      final post = _posts[index];
+      _posts[index] = Post(
+        id: post.id,
+        content: post.content,
+        image: post.image,
+        authorId: post.authorId,
+        authorUsername: post.authorUsername,
+        createdAt: post.createdAt,
+        likesCount: post.likesCount,
+        repostsCount: isReposted ? post.repostsCount + 1 : post.repostsCount - 1,
+        commentsCount: post.commentsCount,
+        isLiked: post.isLiked,
+        isReposted: isReposted,
+      );
+    }
+  });
+}
+```
+
+6. Testing Checklist
+-------------------
+1. Basic Functionality:
+   - Repost button works
+   - Count updates correctly
+   - Icon changes appropriately
+
+2. Error Cases:
+   - Network errors
+   - Server errors
+   - Invalid responses
+
+3. Edge Cases:
+   - Multiple rapid clicks
+   - Network disconnection
+   - App backgrounding
+
+4. State Management:
+   - State updates correctly
+   - Parent notification works
+   - State rollback on error
+
+7. Common Issues and Solutions
+-----------------------------
+1. Double Triggers:
+   - Fixed with _isReposting flag
+   - Prevents multiple API calls
+
+2. Incorrect Count:
+   - Fixed with proper state management
+   - Optimistic updates with rollback
+
+3. Race Conditions:
+   - Fixed with mounted checks
+   - Proper state synchronization
+
+4. UI Glitches:
+   - Fixed with loading states
+   - Proper error handling
+   - Visual feedback 
