@@ -15,6 +15,11 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.db.models import Q, Max
 from rest_framework.pagination import PageNumberPagination
+from rest_framework import viewsets, permissions, filters
+from rest_framework.decorators import action
+from rest_framework.response import Response
+from django_filters.rest_framework import DjangoFilterBackend
+from django.db.models import Q
 
 # Create your views here.
 
@@ -37,6 +42,50 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    
+    # Add filtering and search backends
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter
+    ]
+    
+    # Configure search fields
+    search_fields = ['username', 'first_name', 'last_name', 'email']
+    
+    # Configure filterable fields
+    filterset_fields = ['is_active', 'is_staff']
+    
+    # Configure ordering fields
+    ordering_fields = ['username', 'date_joined', 'last_login']
+    ordering = ['-date_joined']  # Default ordering
+
+    def get_queryset(self):
+        """
+        Override get_queryset to add custom filtering logic
+        """
+        queryset = User.objects.all()
+        
+        # Custom search parameter handling
+        search_query = self.request.query_params.get('search', None)
+        if search_query:
+            queryset = queryset.filter(
+                Q(username__icontains=search_query) |
+                Q(first_name__icontains=search_query) |
+                Q(last_name__icontains=search_query) |
+                Q(email__icontains=search_query)
+            )
+        
+        # Additional custom filters
+        username = self.request.query_params.get('username', None)
+        if username:
+            queryset = queryset.filter(username__icontains=username)
+            
+        is_active = self.request.query_params.get('is_active', None)
+        if is_active is not None:
+            queryset = queryset.filter(is_active=is_active.lower() == 'true')
+        
+        return queryset
 
     @action(detail=True, methods=['get'])
     def profile(self, request, pk=None):
@@ -284,6 +333,16 @@ class MessageViewSet(viewsets.ModelViewSet):
             )
         return super().update(request, *args, **kwargs)
 
+    def partial_update(self, request, *args, **kwargs):
+        message = self.get_object()
+        # Only allow sender to edit their own messages
+        if message.sender != request.user:
+            return Response(
+                {"error": "You can only edit your own messages"},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        return super().partial_update(request, *args, **kwargs)
+
     def destroy(self, request, *args, **kwargs):
         message = self.get_object()
         # Only allow sender to delete their own messages
@@ -326,7 +385,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         messages = Message.objects.filter(
             (Q(sender=user) & Q(receiver=other_user)) |
             (Q(sender=other_user) & Q(receiver=user))
-        ).order_by('-created_at')  # Changed to descending order to match frontend expectation
+        ).order_by('-created_at')  # Descending order for newest first
         
         # Apply pagination
         page = self.paginate_queryset(messages)
@@ -355,7 +414,7 @@ class MessageViewSet(viewsets.ModelViewSet):
         )
 
 class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    def validate(self, attrs):
+    def validate(self, attrs):  
         data = super().validate(attrs)
         data['user'] = UserSerializer(self.user).data
         return data
